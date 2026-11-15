@@ -19,6 +19,8 @@ struct ControlView: View {
     @State private var downloadConfig: TranslationSession.Configuration?
     @State private var keyInput = ""
     @State private var keySaved = false
+    /// 热词表：提高专有名词的转写准确率，下次开始听译时生效
+    @AppStorage(Terms.defaultsKey) private var terms = ""
     /// 阿里云接入地址，留空用默认地址(控制台给了专属地址时填这里)
     @AppStorage(AliyunASR.endpointDefaultsKey) private var aliyunEndpoint = ""
 
@@ -77,6 +79,14 @@ struct ControlView: View {
                 }
                 .font(.caption)
             }
+
+            HStack {
+                Text("热词").foregroundStyle(.secondary)
+                TextField("公司名、产品名、技术名词，逗号分隔(如 Kubernetes, rate limiter, 限流器)", text: $terms)
+                    .textFieldStyle(.roundedBorder)
+                    .disabled(controller.isRunning)
+            }
+            .font(.caption)
 
             if controller.translationNeedsDownload {
                 HStack {

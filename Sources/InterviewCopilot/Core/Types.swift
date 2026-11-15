@@ -61,6 +61,7 @@ enum LanguageMode: String, CaseIterable, Identifiable {
 
 /// 转写线路。本地离线可用但延迟高；云端需要各自的 API Key。
 enum ASRLine: String, CaseIterable, Identifiable {
+    case auto
     case local
     case deepgram
     case assemblyai
@@ -70,6 +71,7 @@ enum ASRLine: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
+        case .auto: return "自动(选最快的云端线路)"
         case .local: return "本地(离线)"
         case .deepgram: return "海外：Deepgram"
         case .assemblyai: return "海外：AssemblyAI"
@@ -78,7 +80,7 @@ enum ASRLine: String, CaseIterable, Identifiable {
     }
 
     /// 钥匙串里的条目名；本地线路不需要密钥
-    var keyAccount: String? { self == .local ? nil : "asr.\(rawValue)" }
+    var keyAccount: String? { self == .local || self == .auto ? nil : "asr.\(rawValue)" }
 
     /// 启动参数 --line=<名字> 优先，其次是上次的选择
     static var initial: ASRLine {

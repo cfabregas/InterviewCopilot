@@ -53,6 +53,9 @@ final class SessionController: ObservableObject {
     private var sessionID: Int64 = -1
     private var audioStartedAt = Date()
     private var clock = AudioClock(sampleRate: 48_000)
+    private var splitter = SentenceSplitter()
+    /// 当前实际在用的转写线路，显示在状态里
+    private var route = ""
 
     private var eventsTask: Task<Void, Never>?
     private var levelTask: Task<Void, Never>?
@@ -92,23 +95,10 @@ final class SessionController: ObservableObject {
                 Log.write("系统不支持该语言对的本地翻译，本次只转写。")
             }
 
-            let asr: ASRProvider
-            if let account = line.keyAccount {
-                guard let key = KeyStore.get(account) else {
-                    throw AppError("还没有填写\(line.title)的 API Key，请在主窗口填入并保存")
-                }
-                status = "正在连接云端转写…"
-                switch line {
-                case .deepgram: asr = DeepgramASR(apiKey: key)
-                case .assemblyai: asr = AssemblyAIASR(apiKey: key)
-                default: asr = AliyunASR(apiKey: key)
-                }
-            } else {
-                status = "正在加载转写模型(首次可能要一分钟)…"
-                asr = AppleSpeechASR()
-            }
-            Log.write("转写线路：\(line.title)")
+            status = line == .local ? "正在加载转写模型(首次可能要一分钟)…" : "正在连接云端转写…"
+            let asr = try await makeASR()
             try await asr.start(locale: mode.sourceLocale)
+            splitter = SentenceSplitter()
             self.asr = asr
 
             let formatter = DateFormatter()
@@ -151,7 +141,11 @@ final class SessionController: ObservableObject {
             store?.setAudioStart(session: sessionID, system: audioStartedAt, mic: micStartedAt)
 
             eventsTask = Task { [weak self] in
-                for await event in asr.events { self?.handle(event) }
+                for await event in asr.events {
+                    guard let self else { return }
+                    // 先过一遍长句切分，稳定的整句会被提前定稿
+                    for piece in self.splitter.process(event) { self.handle(piece) }
+                }
             }
             // 每 5 秒检查一次音量，长时间静音时提醒(可能是没授权，或对方确实没说话)
             levelTask = Task { [weak self] in
@@ -174,7 +168,7 @@ final class SessionController: ObservableObject {
                 }
             }
             isRunning = true
-            status = translator == nil ? "正在听(仅转写)" : "正在听译"
+            status = (translator == nil ? "正在听(仅转写)" : "正在听译") + " · " + route
             Log.write("会话开始：\(mode.title)，目录 \(dir.lastPathComponent)")
         } catch {
             status = "启动失败：\(error)"
@@ -213,6 +207,89 @@ final class SessionController: ObservableObject {
         sessionID = -1
     }
 
+    // MARK: - 转写线路
+
+    private func cloudProvider(_ line: ASRLine, key: String, terms: [String]) -> ASRProvider {
+        switch line {
+        case .deepgram: return DeepgramASR(apiKey: key, terms: terms)
+        case .assemblyai: return AssemblyAIASR(apiKey: key, terms: terms)
+        default: return AliyunASR(apiKey: key)
+        }
+    }
+
+    /// 按当前选择建好转写线路。云端线路都包一层断线保护，并用本地转写兜底。
+    private func makeASR() async throws -> ASRProvider {
+        let terms = Terms.load()
+        if !terms.isEmpty { Log.write("热词 \(terms.count) 个：\(terms.prefix(8).joined(separator: "、"))\(terms.count > 8 ? "…" : "")") }
+        let makeLocal: () -> ASRProvider = { AppleSpeechASR(terms: terms) }
+
+        var chosen = line
+        var started: ASRProvider?
+        if line == .auto {
+            (chosen, started) = await fastestCloudLine(terms: terms)
+        }
+        guard let account = chosen.keyAccount else {
+            route = ASRLine.local.title
+            Log.write("转写线路：\(route)")
+            return makeLocal()
+        }
+        guard let key = KeyStore.get(account) else {
+            throw AppError("还没有填写\(chosen.title)的 API Key，请在主窗口填入并保存")
+        }
+        route = chosen.title
+        Log.write("转写线路：\(route)(断线时本地兜底)")
+        let resilient = ResilientASR(name: chosen.title, started: started,
+                                     makePrimary: { [weak self] in
+                                         self?.cloudProvider(chosen, key: key, terms: terms) ?? makeLocal()
+                                     },
+                                     makeFallback: makeLocal)
+        resilient.onRoute = { [weak self] description in
+            Task { @MainActor in
+                guard let self, self.isRunning else { return }
+                self.route = description
+                self.status = (self.translator == nil ? "正在听(仅转写)" : "正在听译") + " · " + description
+            }
+        }
+        return resilient
+    }
+
+    /// 自动选路：所有填了密钥的云端线路同时建连，用最先连上的那条；一条都连不上就用本地。
+    private func fastestCloudLine(terms: [String]) async -> (ASRLine, ASRProvider?) {
+        let candidates = ASRLine.allCases.compactMap { line -> (ASRLine, String)? in
+            guard let account = line.keyAccount, let key = KeyStore.get(account) else { return nil }
+            return (line, key)
+        }
+        guard !candidates.isEmpty else {
+            Log.write("自动选路：没有可用的云端密钥，使用本地转写")
+            return (.local, nil)
+        }
+        let locale = mode.sourceLocale
+        var results: [(line: ASRLine, provider: ASRProvider, ms: Int)] = []
+        await withTaskGroup(of: (ASRLine, ASRProvider, Int)?.self) { group in
+            for (line, key) in candidates {
+                let provider = cloudProvider(line, key: key, terms: terms)
+                group.addTask {
+                    let began = Date()
+                    do {
+                        try await provider.start(locale: locale)
+                        return (line, provider, Int(Date().timeIntervalSince(began) * 1000))
+                    } catch {
+                        Log.write("自动选路：\(line.title) 连不上(\(error))")
+                        return nil
+                    }
+                }
+            }
+            for await result in group {
+                if let result { results.append(result) }
+            }
+        }
+        results.sort { $0.ms < $1.ms }
+        Log.write("自动选路测速：" + (results.isEmpty ? "全部失败" : results.map { "\($0.line.title) \($0.ms) ms" }.joined(separator: "，")))
+        guard let best = results.first else { return (.local, nil) }
+        for other in results.dropFirst() { Task { await other.provider.stop() } }
+        return (best.line, best.provider)
+    }
+
     // MARK: - 转写事件
 
     private func handle(_ event: ASREvent) {
@@ -249,17 +326,17 @@ final class SessionController: ObservableObject {
             lines[index].isFinal = true
 
             let segmentID = store?.insertSegment(session: sessionID, channel: "system",
-                                                 startMs: event.startMs, endMs: event.endMs,
+                                                 startMs: event.startMs, endMs: max(event.endMs, event.startMs),
                                                  lang: mode.sourceLanguage.minimalIdentifier, text: text) ?? -1
             lines[index].segmentID = segmentID
 
             // 定稿延迟：这句话说完到定稿结果出来过了多久
-            let lagMs = clock.lagMs(audioMs: event.endMs)
+            let lagMs = event.endMs >= 0 ? "\(clock.lagMs(audioMs: event.endMs)) ms" : "提前切分"
             // 中间结果延迟：原文上屏比说话慢多少(取本句各次中间结果的中位数)
             let sorted = partialLagsMs.sorted()
             let partialLag = sorted.isEmpty ? "无" : "\(sorted[sorted.count / 2]) ms"
             partialLagsMs = []
-            Log.write("定稿 [\(event.startMs)–\(event.endMs) ms，定稿延迟 \(lagMs) ms，中间结果延迟 \(partialLag)] \(text)")
+            Log.write("定稿 [\(event.startMs)–\(event.endMs) ms，定稿延迟 \(lagMs)，中间结果延迟 \(partialLag)] \(text)")
             translateFinal(lineID: lineID, segmentID: segmentID, text: text)
         }
     }

@@ -3,7 +3,7 @@ import Foundation
 
 /// 海外线路的流式转写：AssemblyAI 实时接口(v3)。
 /// 文档：https://www.assemblyai.com/docs/api-reference/streaming-api/streaming-api
-final class AssemblyAIASR: ASRProvider {
+final class AssemblyAIASR: ASRProvider, DropSimulating {
     let events: AsyncStream<ASREvent>
     private let eventContinuation: AsyncStream<ASREvent>.Continuation
 
@@ -18,8 +18,11 @@ final class AssemblyAIASR: ASRProvider {
     /// 已经定稿的最后一轮，防止同一轮重复定稿
     private var lastFinalTurn = -1
 
-    init(apiKey: String) {
+    private let terms: [String]
+
+    init(apiKey: String, terms: [String] = []) {
         self.apiKey = apiKey
+        self.terms = terms
         (events, eventContinuation) = AsyncStream<ASREvent>.makeStream()
     }
 
@@ -36,6 +39,11 @@ final class AssemblyAIASR: ASRProvider {
         if chinese {
             components.queryItems?.append(URLQueryItem(name: "language_codes", value: "[\"zh\"]"))
         }
+        // 热词：JSON 数组
+        if !terms.isEmpty, let data = try? JSONSerialization.data(withJSONObject: terms),
+           let json = String(data: data, encoding: .utf8) {
+            components.queryItems?.append(URLQueryItem(name: "keyterms_prompt", value: json))
+        }
         var request = URLRequest(url: components.url!)
         request.timeoutInterval = 10
         request.setValue(apiKey, forHTTPHeaderField: "Authorization")
@@ -43,6 +51,9 @@ final class AssemblyAIASR: ASRProvider {
         let socket = StreamingSocket(request: request)
         socket.onText = { [weak self] text in
             self?.queue.async { self?.handle(text) }
+        }
+        socket.onClose = { [weak self] in
+            self?.queue.async { self?.connectionClosed() }
         }
         let began = Date()
         try await socket.open()
@@ -74,6 +85,20 @@ final class AssemblyAIASR: ASRProvider {
         }
         await socket?.drainAndClose(timeout: 3)
         eventContinuation.finish()
+    }
+
+
+    /// 连接意外断开：结束结果流，让上层去重连
+    private func connectionClosed() {
+        guard socket != nil else { return }   // 正常 stop 时 socket 已经置空
+        socket = nil
+        pending = Data()
+        
+        eventContinuation.finish()
+    }
+
+    func simulateDrop() {
+        queue.async { self.socket?.forceClose() }
     }
 
     // MARK: - 结果处理(在 queue 上)

@@ -28,8 +28,11 @@ final class AppleSpeechASR: ASRProvider {
     private var resultsTask: Task<Void, Never>?
     private let feedQueue = DispatchQueue(label: "copilot.asr.feed", qos: .userInteractive)
 
-    init(variant: Variant = .fromArguments) {
+    private let terms: [String]
+
+    init(variant: Variant = .fromArguments, terms: [String] = []) {
         self.variant = variant
+        self.terms = terms
         (events, eventContinuation) = AsyncStream<ASREvent>.makeStream()
     }
 
@@ -70,6 +73,12 @@ final class AppleSpeechASR: ASRProvider {
 
         let began = Date()
         let analyzer = SpeechAnalyzer(modules: [module])
+        if !terms.isEmpty {
+            // 热词：告诉识别器这些词可能出现
+            let context = AnalysisContext()
+            context.contextualStrings = [.general: terms]
+            try? await analyzer.setContext(context)
+        }
         let converter = try await AnalyzerInputConverter.converter(compatibleWith: [module])
         // 预加载模型。冷启动可能要几十秒，之后再开始就很快。
         try await analyzer.prepareToAnalyze(in: await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [module]))

@@ -3,7 +3,7 @@ import Foundation
 
 /// 国内线路的流式转写：阿里云百炼 Paraformer 实时识别(WebSocket)。
 /// 文档：https://help.aliyun.com/zh/model-studio/websocket-for-paraformer-real-time-service
-final class AliyunASR: ASRProvider {
+final class AliyunASR: ASRProvider, DropSimulating {
     static let defaultEndpoint = "wss://dashscope.aliyuncs.com/api-ws/v1/inference"
     static let endpointDefaultsKey = "aliyunEndpoint"
 
@@ -20,6 +20,7 @@ final class AliyunASR: ASRProvider {
     /// 每攒够 100 ms 音频发一次(官方建议的包大小)
     private let chunkBytes = PCM16Downsampler.sampleRate * 2 / 10
     private let started = OneShot<Void>()
+    private var stopped = false
 
     init(apiKey: String) {
         self.apiKey = apiKey
@@ -40,6 +41,9 @@ final class AliyunASR: ASRProvider {
         let socket = StreamingSocket(request: request)
         socket.onText = { [weak self] text in
             self?.queue.async { self?.handle(text) }
+        }
+        socket.onClose = { [weak self] in
+            self?.queue.async { self?.connectionClosed() }
         }
         let began = Date()
         try await socket.open()
@@ -82,6 +86,7 @@ final class AliyunASR: ASRProvider {
 
     func stop() async {
         let socket: StreamingSocket? = queue.sync {
+            stopped = true
             let socket = self.socket
             if let socket {
                 if !pending.isEmpty { socket.send(pending) }
@@ -96,6 +101,20 @@ final class AliyunASR: ASRProvider {
         }
         await socket?.drainAndClose(timeout: 3)
         eventContinuation.finish()
+    }
+
+
+    /// 连接意外断开：结束结果流，让上层去重连
+    private func connectionClosed() {
+        guard socket != nil else { return }   // 正常 stop 时 socket 已经置空
+        socket = nil
+        pending = Data()
+        
+        eventContinuation.finish()
+    }
+
+    func simulateDrop() {
+        queue.async { self.socket?.forceClose() }
     }
 
     // MARK: - 结果处理(在 queue 上)
@@ -123,7 +142,8 @@ final class AliyunASR: ASRProvider {
                                              startMs: beginMs, endMs: endMs))
         case "task-failed":
             let reason = "\(header["error_code"] ?? "")：\(header["error_message"] ?? text)"
-            Log.write("阿里云识别任务失败 \(reason)")
+            // 主动结束时(比如测速后没被选中、一点音频都没发)服务端也会报失败，不用提示
+            if !stopped { Log.write("阿里云识别任务失败 \(reason)") }
             started.fulfill(.failure(AppError("阿里云识别任务失败 \(reason)")))
         default:
             break   // task-finished 等

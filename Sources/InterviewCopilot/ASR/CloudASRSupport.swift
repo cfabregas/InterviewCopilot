@@ -77,6 +77,8 @@ final class StreamingSocket {
     private var receiveTask: Task<Void, Never>?
     /// 收到文本消息。在任意线程回调。
     var onText: ((String) -> Void)?
+    /// 连接关闭(正常或异常)。在任意线程回调。
+    var onClose: (() -> Void)?
 
     init(request: URLRequest) {
         task = URLSession.shared.webSocketTask(with: request)
@@ -109,10 +111,16 @@ final class StreamingSocket {
                     @unknown default: break
                     }
                 } catch {
+                    self?.onClose?()
                     return   // 连接关闭
                 }
             }
         }
+    }
+
+    /// 立刻断开，模拟网络中断
+    func forceClose() {
+        task.cancel(with: .abnormalClosure, reason: nil)
     }
 
     func send(_ data: Data) {
@@ -133,6 +141,20 @@ final class StreamingSocket {
         task.cancel(with: .normalClosure, reason: nil)
         receiveTask?.cancel()
         receiveTask = nil
+    }
+}
+
+/// 热词/术语表：主窗口里填，逗号或换行分隔，最多 100 个
+enum Terms {
+    static let defaultsKey = "asrTerms"
+
+    static func load() -> [String] {
+        let raw = UserDefaults.standard.string(forKey: defaultsKey) ?? ""
+        let parts = raw.split(whereSeparator: { ",，\n;；".contains($0) })
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        var seen = Set<String>()
+        return Array(parts.filter { seen.insert($0.lowercased()).inserted }.prefix(100))
     }
 }
 

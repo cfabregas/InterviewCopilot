@@ -3,7 +3,7 @@ import Foundation
 
 /// 海外线路的流式转写：Deepgram 实时接口。
 /// 文档：https://developers.deepgram.com/reference/speech-to-text/listen-streaming
-final class DeepgramASR: ASRProvider {
+final class DeepgramASR: ASRProvider, DropSimulating {
     let events: AsyncStream<ASREvent>
     private let eventContinuation: AsyncStream<ASREvent>.Continuation
 
@@ -21,8 +21,11 @@ final class DeepgramASR: ASRProvider {
     private var lastEndMs = 0
     private var separator = " "
 
-    init(apiKey: String) {
+    private let terms: [String]
+
+    init(apiKey: String, terms: [String] = []) {
         self.apiKey = apiKey
+        self.terms = terms
         (events, eventContinuation) = AsyncStream<ASREvent>.makeStream()
     }
 
@@ -42,6 +45,10 @@ final class DeepgramASR: ASRProvider {
             URLQueryItem(name: "endpointing", value: "300"),
             URLQueryItem(name: "utterance_end_ms", value: "1000"),
         ]
+        // 热词：只有 nova-3 支持 keyterm
+        if !chinese {
+            components.queryItems?.append(contentsOf: terms.map { URLQueryItem(name: "keyterm", value: $0) })
+        }
         var request = URLRequest(url: components.url!)
         request.timeoutInterval = 10
         request.setValue("Token \(apiKey)", forHTTPHeaderField: "Authorization")
@@ -49,6 +56,9 @@ final class DeepgramASR: ASRProvider {
         let socket = StreamingSocket(request: request)
         socket.onText = { [weak self] text in
             self?.queue.async { self?.handle(text) }
+        }
+        socket.onClose = { [weak self] in
+            self?.queue.async { self?.connectionClosed() }
         }
         let began = Date()
         try await socket.open()
@@ -81,6 +91,20 @@ final class DeepgramASR: ASRProvider {
         await socket?.drainAndClose(timeout: 3)
         queue.sync { flush() }
         eventContinuation.finish()
+    }
+
+
+    /// 连接意外断开：结束结果流，让上层去重连
+    private func connectionClosed() {
+        guard socket != nil else { return }   // 正常 stop 时 socket 已经置空
+        socket = nil
+        pending = Data()
+        flush()
+        eventContinuation.finish()
+    }
+
+    func simulateDrop() {
+        queue.async { self.socket?.forceClose() }
     }
 
     // MARK: - 结果处理(都在 queue 上)
