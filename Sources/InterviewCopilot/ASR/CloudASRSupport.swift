@@ -149,7 +149,9 @@ enum Terms {
     static let defaultsKey = "asrTerms"
 
     static func load() -> [String] {
-        let raw = UserDefaults.standard.string(forKey: defaultsKey) ?? ""
+        // 手填的热词在前，后面接上从简历里抽出来的
+        let raw = (UserDefaults.standard.string(forKey: defaultsKey) ?? "") + "\n"
+            + (UserDefaults.standard.string(forKey: "resumeTerms") ?? "")
         let parts = raw.split(whereSeparator: { ",，\n;；".contains($0) })
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }

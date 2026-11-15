@@ -44,6 +44,17 @@ final class SessionController: ObservableObject {
     /// 中间结果的临时翻译最小间隔。本地翻译很快，可以较频繁；大模型线路应调大。
     var provisionalInterval: TimeInterval = 1.0
 
+    /// 问题检测和答案生成
+    let answers: AnswerEngine
+
+    init(answers: AnswerEngine) {
+        self.answers = answers
+        answers.onAnswered = { [weak self] question, answer, askedMs in
+            guard let self, self.sessionID >= 0 else { return }
+            self.store?.insertQA(session: self.sessionID, askedMs: askedMs, question: question, answer: answer)
+        }
+    }
+
     private let tap = SystemAudioTap()
     private let mic = MicRecorder()
     private var asr: ASRProvider?
@@ -150,17 +161,19 @@ final class SessionController: ObservableObject {
             // 每 5 秒检查一次音量，长时间静音时提醒(可能是没授权，或对方确实没说话)
             levelTask = Task { [weak self] in
                 var silentChecks = 0
+                var everHeard = false   // 听到过声音就说明权限没问题，之后的安静只是没人说话
                 while !Task.isCancelled {
                     try? await Task.sleep(nanoseconds: 5_000_000_000)
                     guard let self, !Task.isCancelled else { return }
                     let peak = self.tap.takePeak()
                     if peak >= 0.0005 {
+                        everHeard = true
                         silentChecks = 0
                     } else {
                         silentChecks += 1
                         // 连续 15 秒静音时提醒一次
-                        if silentChecks == 3 {
-                            Log.write("系统声道已连续 15 秒静音。如果对方正在说话，请到 系统设置 → 隐私与安全性 → "
+                        if silentChecks == 3, !everHeard {
+                            Log.write("开始后 15 秒一直没有采到系统声音。如果对方正在说话，请到 系统设置 → 隐私与安全性 → "
                                       + "屏幕与系统音频录制 里允许本应用录制系统音频，然后重新开始。")
                             self.status = "没有采到声音，请检查系统音频录制权限"
                         }
@@ -168,6 +181,7 @@ final class SessionController: ObservableObject {
                 }
             }
             isRunning = true
+            answers.sessionStarted(mode: mode)
             status = (translator == nil ? "正在听(仅转写)" : "正在听译") + " · " + route
             Log.write("会话开始：\(mode.title)，目录 \(dir.lastPathComponent)")
         } catch {
@@ -191,6 +205,7 @@ final class SessionController: ObservableObject {
     private func teardown() async {
         levelTask?.cancel()
         levelTask = nil
+        answers.sessionEnded()
         let tap = self.tap
         await Task.detached { tap.stop() }.value
         tap.onBuffer = nil
@@ -299,6 +314,7 @@ final class SessionController: ObservableObject {
         case .partial:
             guard !text.isEmpty else { return }
             if event.endMs >= 0 { partialLagsMs.append(clock.lagMs(audioMs: event.endMs)) }
+            answers.heardPartial()
             if let id = openLineID, let index = lines.firstIndex(where: { $0.id == id }) {
                 lines[index].source = text
             } else {
@@ -338,6 +354,7 @@ final class SessionController: ObservableObject {
             partialLagsMs = []
             Log.write("定稿 [\(event.startMs)–\(event.endMs) ms，定稿延迟 \(lagMs)，中间结果延迟 \(partialLag)] \(text)")
             translateFinal(lineID: lineID, segmentID: segmentID, text: text)
+            answers.heardFinal(text, endMs: event.endMs)
         }
     }
 

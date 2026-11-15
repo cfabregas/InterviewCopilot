@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 import Translation
 
 @MainActor
@@ -16,6 +17,30 @@ struct ControlView: View {
     @ObservedObject var controller: SessionController
     @ObservedObject var settings: OverlaySettings
     @ObservedObject var log: LogStore
+    @ObservedObject var answers: AnswerEngine
+    @ObservedObject var resume: ResumeStore
+    @State private var llmKeyInput = ""
+    @State private var llmKeySaved = false
+
+    private func importResume(_ slot: ResumeSlot) {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.pdf, .plainText, .rtf,
+                                     .init(filenameExtension: "docx"), .init(filenameExtension: "doc"),
+                                     .init(filenameExtension: "md")].compactMap { $0 }
+        panel.message = "选择\(slot.title)文件(PDF、Word 或纯文本)"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try resume.load(from: url, slot: slot)
+        } catch {
+            Log.write("简历导入失败：\(error)")
+            return
+        }
+        guard let llm = answers.llmLine.makeClient() else {
+            Log.write("没有填写\(answers.llmLine.title)的密钥，暂时无法从简历抽取热词")
+            return
+        }
+        Task { await resume.extractTerms(slot, using: llm) }
+    }
     @State private var downloadConfig: TranslationSession.Configuration?
     @State private var keyInput = ""
     @State private var keySaved = false
@@ -88,6 +113,49 @@ struct ControlView: View {
             }
             .font(.caption)
 
+            Divider()
+
+            HStack {
+                Toggle("实时答案", isOn: $answers.enabled)
+                Picker("大模型", selection: $answers.llmLine) {
+                    ForEach(LLMLine.allCases) { Text($0.title).tag($0) }
+                }
+                .frame(width: 300)
+                .disabled(controller.isRunning)
+                if answers.llmLine == .claude {
+                    SecureField(llmKeySaved ? "已保存，重新输入可替换" : "粘贴 Anthropic API Key", text: $llmKeyInput)
+                        .frame(width: 180)
+                    Button("保存") {
+                        llmKeySaved = KeyStore.set(llmKeyInput, for: LLMLine.claude.keyAccount) && !llmKeyInput.isEmpty
+                        llmKeyInput = ""
+                    }
+                }
+            }
+            .onAppear { llmKeySaved = KeyStore.has(LLMLine.claude.keyAccount) }
+
+            ForEach(ResumeSlot.allCases) { slot in
+                HStack {
+                    Text(slot.title).frame(width: 60, alignment: .leading)
+                    Button(resume.analyzing.contains(slot) ? "正在分析…" : (resume.texts[slot] == nil ? "导入…" : "更换…")) {
+                        importResume(slot)
+                    }
+                    .disabled(resume.analyzing.contains(slot) || controller.isRunning)
+                    Button("清除") { resume.clear(slot) }
+                        .disabled(resume.texts[slot] == nil || controller.isRunning)
+                    Text(resume.summary(slot)).foregroundStyle(.secondary).lineLimit(1)
+                    Spacer()
+                }
+            }
+            Text("英文面试优先用英文简历，中文面试优先用中文简历；只导入了一份时两种面试都用它。⌃⌥A 回答上一句，⌃⌥X 关闭答案。")
+                .font(.caption).foregroundStyle(.secondary)
+            HStack(alignment: .top) {
+                Text("岗位描述").foregroundStyle(.secondary).font(.caption)
+                TextEditor(text: $resume.jd)
+                    .font(.system(size: 11))
+                    .frame(height: 44)
+                    .overlay(RoundedRectangle(cornerRadius: 4).stroke(.quaternary))
+            }
+
             if controller.translationNeedsDownload {
                 HStack {
                     Text("翻译语言包未安装，当前只能转写。")
@@ -141,7 +209,7 @@ struct ControlView: View {
             .background(Color(nsColor: .textBackgroundColor))
         }
         .padding(16)
-        .frame(minWidth: 620, minHeight: 440)
+        .frame(minWidth: 720, minHeight: 600)
         .translationTask(downloadConfig) { session in
             do {
                 try await session.prepareTranslation()

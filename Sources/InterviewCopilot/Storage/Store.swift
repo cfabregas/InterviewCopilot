@@ -33,6 +33,14 @@ final class Store {
             created_at REAL NOT NULL
         );
         CREATE INDEX IF NOT EXISTS segment_session ON segment(session_id, start_ms);
+        CREATE TABLE IF NOT EXISTS qa (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id INTEGER NOT NULL REFERENCES session(id),
+            asked_ms INTEGER NOT NULL,
+            question TEXT NOT NULL,
+            answer TEXT NOT NULL,
+            created_at REAL NOT NULL
+        );
         """, nil, nil, nil)
     }
 
@@ -55,6 +63,11 @@ final class Store {
     func insertSegment(session: Int64, channel: String, startMs: Int, endMs: Int, lang: String, text: String) -> Int64 {
         run("INSERT INTO segment (session_id, channel, start_ms, end_ms, lang, text_rt, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
             [session, channel, startMs, endMs, lang, text, Date().timeIntervalSince1970])
+    }
+
+    func insertQA(session: Int64, askedMs: Int, question: String, answer: String) {
+        run("INSERT INTO qa (session_id, asked_ms, question, answer, created_at) VALUES (?, ?, ?, ?, ?)",
+            [session, askedMs, question, answer, Date().timeIntervalSince1970])
     }
 
     func setTranslation(segment: Int64, translation: String) {

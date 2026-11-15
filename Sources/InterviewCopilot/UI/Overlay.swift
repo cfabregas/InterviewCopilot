@@ -59,6 +59,46 @@ final class OverlayPanel: NSPanel {
     override var canBecomeMain: Bool { false }
 }
 
+/// 答案卡：问题、中文要点、可以照着说的回答
+struct AnswerCardView: View {
+    let card: AnswerCard
+    let fontSize: Double
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("问：" + card.question)
+                .font(.system(size: fontSize * 0.6))
+                .foregroundStyle(.white.opacity(0.55))
+                .lineLimit(2)
+            if card.text.isEmpty, card.error == nil {
+                Text("正在生成答案…")
+                    .font(.system(size: fontSize * 0.75))
+                    .foregroundStyle(.white.opacity(0.6))
+            }
+            if !card.points.isEmpty {
+                Text(card.points)
+                    .font(.system(size: fontSize * 0.85, weight: .semibold))
+                    .foregroundStyle(Color(red: 1, green: 0.86, blue: 0.45))
+            }
+            if !card.script.isEmpty {
+                Text(card.script)
+                    .font(.system(size: fontSize * 0.75))
+                    .foregroundStyle(.white.opacity(0.92))
+            }
+            if let error = card.error {
+                Text("答案生成失败：" + error)
+                    .font(.system(size: fontSize * 0.6))
+                    .foregroundStyle(.red.opacity(0.9))
+                    .lineLimit(3)
+            }
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 8).fill(.white.opacity(0.08)))
+    }
+}
+
 /// SwiftUI 内容会吃掉鼠标事件，导致无边框窗口拖不动。这里直接把按下鼠标变成拖动窗口。
 final class DraggableHostingView<Content: View>: NSHostingView<Content> {
     override var mouseDownCanMoveWindow: Bool { true }
@@ -71,6 +111,7 @@ final class DraggableHostingView<Content: View>: NSHostingView<Content> {
 struct SubtitleOverlayView: View {
     @ObservedObject var controller: SessionController
     @ObservedObject var settings: OverlaySettings
+    @ObservedObject var answers: AnswerEngine
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -93,6 +134,9 @@ struct SubtitleOverlayView: View {
                     }
                 }
                 .fixedSize(horizontal: false, vertical: true)
+            }
+            if let card = answers.card {
+                AnswerCardView(card: card, fontSize: settings.fontSize)
             }
         }
         .padding(14)
