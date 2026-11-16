@@ -150,13 +150,19 @@ enum Terms {
 
     static func load() -> [String] {
         // 手填的热词在前，后面接上从简历里抽出来的
-        let raw = (UserDefaults.standard.string(forKey: defaultsKey) ?? "") + "\n"
-            + (UserDefaults.standard.string(forKey: "resumeTerms") ?? "")
-        let parts = raw.split(whereSeparator: { ",，\n;；".contains($0) })
+        // 简历热词按行存放，词本身可以带逗号(如 "LBank Co., Ltd.")，不能再按逗号拆
+        let manual = split(UserDefaults.standard.string(forKey: defaultsKey) ?? "")
+        let fromResume = (UserDefaults.standard.string(forKey: "resumeTerms") ?? "")
+            .split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        var seen = Set<String>()
+        return Array((manual + fromResume).filter { seen.insert($0.lowercased()).inserted }.prefix(100))
+    }
+
+    /// 把逗号、分号或换行分隔的一串文字拆成热词
+    static func split(_ raw: String) -> [String] {
+        raw.split(whereSeparator: { ",，\n;；".contains($0) })
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
-        var seen = Set<String>()
-        return Array(parts.filter { seen.insert($0.lowercased()).inserted }.prefix(100))
     }
 }
 

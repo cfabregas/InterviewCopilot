@@ -12,11 +12,19 @@ struct AnswerCard {
     var script: String { parts.1 }
 
     private var parts: (String, String) {
-        guard let range = text.range(of: "\n---") else {
-            return (text.trimmingCharacters(in: .whitespacesAndNewlines), "")
+        if let range = text.range(of: "\n---") {
+            return (String(text[..<range.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines),
+                    String(text[range.upperBound...]).trimmingCharacters(in: CharacterSet(charactersIn: "-\n ")))
         }
-        return (String(text[..<range.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines),
-                String(text[range.upperBound...]).trimmingCharacters(in: CharacterSet(charactersIn: "-\n ")))
+        // 模型有时会漏掉分隔线：开头连续的"- "行算要点，其余算回答
+        let lines = text.components(separatedBy: "\n")
+        var pointCount = 0
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("- ") || trimmed.isEmpty { pointCount += 1 } else { break }
+        }
+        return (lines[..<pointCount].joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines),
+                lines[pointCount...].joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines))
     }
 }
 
@@ -263,8 +271,12 @@ final class AnswerEngine: ObservableObject {
         然后\(script)，第一人称，可以直接照着念。
 
         规则：
-        - 只引用简历里真实存在的经历、项目和数字，不得编造。简历里没有相关经历时，给出通用的回答框架，并把第一条要点写成"需结合自身情况"。
+        - 只引用简历里真实存在的经历、项目和数字，不得编造。只有在简历里完全找不到相关经历、回答必须靠候选人自己补充时，才把第一条要点写成"需结合自身情况"并给出通用的回答框架；简历里有相关经历时不要写这一条。
         - 不要给简历里的事实添加细节：不要补充简历没写的活动名称、时间、数字、工具用途或结果(例如简历只写"大促"，就不要说成某个具体的购物节；简历没写"零停机"，就不要说)。宁可说得笼统，也不要说错。
+        - 每件事都要说对是在哪家公司、哪个项目里做的，不要把一家公司的数字或做法安到另一家头上；简历里已经结束的工作用过去时。
+        - 不要虚构具体的冲突、对话或决策过程。问到简历没有记录的情境(比如和同事的分歧、遇到过的具体问题)时，回答里只讲简历里有的事实，缺少的具体情节用方括号占位让候选人自己填，例如"[补充：当时的分歧是什么]"。
+        - "---"之后的回答是候选人要直接念给面试官听的话：不要出现"简历""需结合自身情况"这类字眼，不要对候选人说话，不要解释你在做什么。
+        - 要点一律用中文写(技术名词除外)。
         - 行为类问题按"情境、任务、行动、结果"组织。
         - 算法或系统设计题给出思路、关键取舍和复杂度。
         - 寒暄或很简单的问题，简短回答即可。

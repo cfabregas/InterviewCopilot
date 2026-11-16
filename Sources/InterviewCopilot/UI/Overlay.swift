@@ -8,7 +8,7 @@ final class OverlaySettings: ObservableObject {
 
     @Published var showSource = true
     @Published var fontSize: Double = 20
-    @Published var opacity: Double = 0.6
+    @Published var opacity: Double = 0.25
     @Published var maxLines = 4
 
     @Published var clickThrough = true {

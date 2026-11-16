@@ -68,14 +68,23 @@ final class ResumeStore: ObservableObject {
     func describeChoice(for mode: LanguageMode) -> String {
         let preferred: ResumeSlot = mode == .enToZh ? .en : .zh
         let other: ResumeSlot = preferred == .en ? .zh : .en
-        if let text = texts[preferred] { return "\(preferred.title) \(text.count) 字" }
-        if let text = texts[other] { return "没有\(preferred.title)，改用\(other.title) \(text.count) 字" }
+        if texts[preferred] != nil { return "\(preferred.title) \(length(preferred))" }
+        if texts[other] != nil { return "没有\(preferred.title)，改用\(other.title) \(length(other))" }
         return "未导入简历(只能给通用回答)"
     }
 
+    /// 简历长度：英文按单词数，中文按字数(不算空白)
+    func length(_ slot: ResumeSlot) -> String {
+        let text = texts[slot] ?? ""
+        if slot == .en {
+            return "\(text.split(whereSeparator: { $0.isWhitespace }).filter { $0.contains(where: \.isLetter) }.count) 词"
+        }
+        return "\(text.filter { !$0.isWhitespace }.count) 字"
+    }
+
     func summary(_ slot: ResumeSlot) -> String {
-        guard let text = texts[slot] else { return "未导入" }
-        return "\(fileNames[slot] ?? "")(\(text.count) 字，热词 \(terms[slot]?.count ?? 0) 个)"
+        guard texts[slot] != nil else { return "未导入" }
+        return "\(fileNames[slot] ?? "")(\(length(slot))，热词 \(terms[slot]?.count ?? 0) 个)"
     }
 
     /// 从文件读出文字。支持 PDF、Word、RTF 和纯文本。
@@ -107,7 +116,7 @@ final class ResumeStore: ObservableObject {
             UserDefaults.standard.set(url.lastPathComponent, forKey: slot.nameKey)
             saveTerms(slot)
         }
-        Log.write("\(slot.title)已导入：\(url.lastPathComponent)，\(text.count) 字")
+        Log.write("\(slot.title)已导入：\(url.lastPathComponent)，\(length(slot))")
     }
 
     /// 清除一份简历：文字、文件名和它带来的热词一起删掉
@@ -119,6 +128,13 @@ final class ResumeStore: ObservableObject {
         UserDefaults.standard.removeObject(forKey: slot.nameKey)
         saveTerms(slot)
         Log.write("\(slot.title)已清除")
+    }
+
+    /// 手动编辑某份简历的热词
+    func setTerms(_ slot: ResumeSlot, _ list: [String]) {
+        guard texts[slot] != nil else { return }
+        terms[slot] = list
+        saveTerms(slot)
     }
 
     private func saveTerms(_ slot: ResumeSlot) {
@@ -140,7 +156,8 @@ final class ResumeStore: ObservableObject {
         """
         let user = "<resume>\n\(text)\n</resume>\n\n<jd>\n\(jd)\n</jd>"
         do {
-            let reply = try await llm.complete(system: system, user: user, tier: .fast)
+            // 抽热词只在导入简历时做一次，不赶时间，用强模型
+            let reply = try await llm.complete(system: system, user: user, tier: .strong)
             guard let start = reply.firstIndex(of: "["), let end = reply.lastIndex(of: "]"),
                   let data = String(reply[start...end]).data(using: .utf8),
                   let raw = try JSONSerialization.jsonObject(with: data) as? [Any] else {

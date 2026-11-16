@@ -22,30 +22,33 @@ struct ControlView: View {
     @State private var llmKeyInput = ""
     @State private var llmKeySaved = false
 
-    private func importResume(_ slot: ResumeSlot) {
-        let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.pdf, .plainText, .rtf,
-                                     .init(filenameExtension: "docx"), .init(filenameExtension: "doc"),
-                                     .init(filenameExtension: "md")].compactMap { $0 }
-        panel.message = "选择\(slot.title)文件(PDF、Word 或纯文本)"
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        do {
-            try resume.load(from: url, slot: slot)
-        } catch {
-            Log.write("简历导入失败：\(error)")
-            return
+    @State private var showingResumeManager = false
+    /// 日志区域是否展开(记住上次的选择)
+    @AppStorage("showLog") private var showLog = true
+
+    /// 收起日志时把窗口缩到刚好放下控件，展开时恢复高度；窗口顶边保持不动
+    private func resizeWindowForLog() {
+        DispatchQueue.main.async {
+            guard let window = NSApp.windows.first(where: { $0.title == "面试助手" }),
+                  let content = window.contentView else { return }
+            let target = showLog ? max(content.fittingSize.height, 680) : content.fittingSize.height
+            var frame = window.frame
+            let delta = target - window.contentLayoutRect.height
+            frame.origin.y -= delta
+            frame.size.height += delta
+            window.setFrame(frame, display: true, animate: true)
         }
-        guard let llm = answers.llmLine.makeClient() else {
-            Log.write("没有填写\(answers.llmLine.title)的密钥，暂时无法从简历抽取热词")
-            return
-        }
-        Task { await resume.extractTerms(slot, using: llm) }
     }
     @State private var downloadConfig: TranslationSession.Configuration?
     @State private var keyInput = ""
     @State private var keySaved = false
     /// 热词表：提高专有名词的转写准确率，下次开始听译时生效
     @AppStorage(Terms.defaultsKey) private var terms = ""
+    /// 实际生效的热词数(手动的加两份简历的，去重后)
+    private var termCount: Int {
+        _ = terms; _ = resume.terms
+        return Terms.load().count
+    }
     /// 阿里云接入地址，留空用默认地址(控制台给了专属地址时填这里)
     @AppStorage(AliyunASR.endpointDefaultsKey) private var aliyunEndpoint = ""
 
@@ -105,14 +108,6 @@ struct ControlView: View {
                 .font(.caption)
             }
 
-            HStack {
-                Text("热词").foregroundStyle(.secondary)
-                TextField("公司名、产品名、技术名词，逗号分隔(如 Kubernetes, rate limiter, 限流器)", text: $terms)
-                    .textFieldStyle(.roundedBorder)
-                    .disabled(controller.isRunning)
-            }
-            .font(.caption)
-
             Divider()
 
             HStack {
@@ -133,27 +128,20 @@ struct ControlView: View {
             }
             .onAppear { llmKeySaved = KeyStore.has(LLMLine.claude.keyAccount) }
 
-            ForEach(ResumeSlot.allCases) { slot in
-                HStack {
-                    Text(slot.title).frame(width: 60, alignment: .leading)
-                    Button(resume.analyzing.contains(slot) ? "正在分析…" : (resume.texts[slot] == nil ? "导入…" : "更换…")) {
-                        importResume(slot)
-                    }
-                    .disabled(resume.analyzing.contains(slot) || controller.isRunning)
-                    Button("清除") { resume.clear(slot) }
-                        .disabled(resume.texts[slot] == nil || controller.isRunning)
-                    Text(resume.summary(slot)).foregroundStyle(.secondary).lineLimit(1)
-                    Spacer()
-                }
+            HStack {
+                Button("简历与热词…") { showingResumeManager = true }
+                Text(ResumeSlot.allCases.map { "\($0.title)\(resume.texts[$0] == nil ? "未导入" : "已导入")" }.joined(separator: "，")
+                     + "，热词 \(termCount) 个")
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("⌃⌥A 回答上一句，⌃⌥X 关闭答案").font(.caption).foregroundStyle(.secondary)
             }
-            Text("英文面试优先用英文简历，中文面试优先用中文简历；只导入了一份时两种面试都用它。⌃⌥A 回答上一句，⌃⌥X 关闭答案。")
-                .font(.caption).foregroundStyle(.secondary)
-            HStack(alignment: .top) {
-                Text("岗位描述").foregroundStyle(.secondary).font(.caption)
-                TextEditor(text: $resume.jd)
-                    .font(.system(size: 11))
-                    .frame(height: 44)
-                    .overlay(RoundedRectangle(cornerRadius: 4).stroke(.quaternary))
+            // 调试用：启动后直接打开管理界面，方便截图检查
+            .onAppear { if CommandLine.arguments.contains("--show-resume-manager") { showingResumeManager = true } }
+            .sheet(isPresented: $showingResumeManager) {
+                ResumeManagerView(resume: resume, answers: answers, locked: controller.isRunning) {
+                    showingResumeManager = false
+                }
             }
 
             if controller.translationNeedsDownload {
@@ -183,8 +171,11 @@ struct ControlView: View {
                     Stepper("显示 \(settings.maxLines) 段", value: $settings.maxLines, in: 1...8)
                 }
                 GridRow {
-                    Slider(value: $settings.fontSize, in: 12...36) { Text("字号") }
-                    Slider(value: $settings.opacity, in: 0.2...1) { Text("背景不透明度") }
+                    Slider(value: $settings.fontSize, in: 12...36) { Text("字号 \(Int(settings.fontSize))") }
+                    // 从 0 开始，滑块位置和百分比才对得上
+                    Slider(value: $settings.opacity, in: 0...1) {
+                        Text("背景不透明度 \(Int((settings.opacity * 100).rounded()))%")
+                    }
                 }
             }
 
@@ -195,6 +186,21 @@ struct ControlView: View {
                 Button("退出应用") { NSApp.terminate(nil) }
             }
 
+            HStack(spacing: 4) {
+                Button {
+                    showLog.toggle()
+                    resizeWindowForLog()
+                } label: {
+                    Label("日志", systemImage: showLog ? "chevron.down" : "chevron.right")
+                        .font(.caption)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .help(showLog ? "收起日志" : "展开日志")
+                Spacer()
+            }
+
+            if showLog {
             ScrollViewReader { proxy in
                 ScrollView {
                     Text(log.text)
@@ -207,9 +213,12 @@ struct ControlView: View {
             }
             .frame(minHeight: 160)
             .background(Color(nsColor: .textBackgroundColor))
+            }
         }
         .padding(16)
-        .frame(minWidth: 720, minHeight: 600)
+        .frame(minWidth: 720, minHeight: showLog ? 600 : nil, alignment: .top)
+        // 上次是收起状态时，启动后也把窗口缩到合适的高度
+        .onAppear { if !showLog { resizeWindowForLog() } }
         .translationTask(downloadConfig) { session in
             do {
                 try await session.prepareTranslation()
