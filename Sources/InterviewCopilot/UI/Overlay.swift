@@ -6,16 +6,27 @@ import SwiftUI
 final class OverlaySettings: ObservableObject {
     weak var panel: NSPanel?
 
-    @Published var showSource = true
-    @Published var fontSize: Double = 20
-    @Published var opacity: Double = 0.25
-    @Published var maxLines = 4
+    // 外观和行为都记在偏好设置里，下次启动沿用
+    private static let defaults = UserDefaults.standard
+    private static func saved<T>(_ key: String, _ fallback: T) -> T { defaults.object(forKey: "overlay.\(key)") as? T ?? fallback }
+    private func save(_ key: String, _ value: Any) { Self.defaults.set(value, forKey: "overlay.\(key)") }
 
-    @Published var clickThrough = true {
-        didSet { panel?.ignoresMouseEvents = clickThrough }
+    @Published var showSource: Bool = saved("showSource", true) { didSet { save("showSource", showSource) } }
+    @Published var fontSize: Double = saved("fontSize", 20.0) { didSet { save("fontSize", fontSize) } }
+    @Published var opacity: Double = saved("opacity", 0.25) { didSet { save("opacity", opacity) } }
+    @Published var maxLines: Int = saved("maxLines", 4) { didSet { save("maxLines", maxLines) } }
+
+    @Published var clickThrough: Bool = saved("clickThrough", true) {
+        didSet {
+            panel?.ignoresMouseEvents = clickThrough
+            save("clickThrough", clickThrough)
+        }
     }
-    @Published var hideFromSharing = true {
-        didSet { panel?.sharingType = hideFromSharing ? .none : .readOnly }
+    @Published var hideFromSharing: Bool = saved("hideFromSharing", true) {
+        didSet {
+            panel?.sharingType = hideFromSharing ? .none : .readOnly
+            save("hideFromSharing", hideFromSharing)
+        }
     }
     @Published var visible = true {
         didSet { refresh() }
@@ -47,7 +58,7 @@ final class OverlayPanel: NSPanel {
         hasShadow = false
         hidesOnDeactivate = false
         isMovableByWindowBackground = true
-        sharingType = .none
+        sharingType = .none   // 启动后由 AppDelegate 按保存的设置再设一次
         minSize = NSSize(width: 360, height: 90)
         maxSize = NSSize(width: 1600, height: 600)
         let hosting = DraggableHostingView(rootView: content)

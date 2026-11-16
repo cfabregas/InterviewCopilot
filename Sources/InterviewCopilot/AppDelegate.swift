@@ -14,6 +14,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var reviewWindow: NSWindow?
     private lazy var mock = MockInterview(answers: answers, resume: resume, post: post)
     private var mockWindow: NSWindow?
+    private var settingsWindow: NSWindow?
+    private let checkup = Checkup()
     private var cardObserver: AnyCancellable?
     private var runningObserver: AnyCancellable?
     private let settings = OverlaySettings()
@@ -26,16 +28,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         overlay = OverlayPanel(content: SubtitleOverlayView(controller: controller, settings: settings, answers: answers))
         settings.panel = overlay
-        overlay.ignoresMouseEvents = settings.clickThrough   // 默认鼠标穿透，⌃⌥T 切换
+        overlay.ignoresMouseEvents = settings.clickThrough   // 默认鼠标穿透，可用快捷键切换
+        overlay.sharingType = settings.hideFromSharing ? .none : .readOnly
+        checkup.sessionRunning = { [weak self] in self?.controller.isRunning ?? false }
 
-        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 760, height: 680),
+        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 760, height: 520),
                           styleMask: [.titled, .closable, .miniaturizable, .resizable],
                           backing: .buffered, defer: false)
         window.title = "面试助手"
-        window.contentView = NSHostingView(rootView: ControlView(controller: controller, settings: settings, log: logStore,
-                                                                  answers: answers, resume: resume,
+        window.contentView = NSHostingView(rootView: ControlView(controller: controller, log: logStore,
+                                                                  answers: answers, resume: resume, checkup: checkup,
                                                                   openReview: { [weak self] in self?.showReview() },
-                                                                  openMock: { [weak self] in self?.showMock() }))
+                                                                  openMock: { [weak self] in self?.showMock() },
+                                                                  openSettings: { [weak self] tab in self?.showSettings(tab: tab) }))
         window.center()
         window.isReleasedWhenClosed = false
         window.delegate = self
@@ -43,21 +48,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
 
-        HotKeys.shared.register(keyCode: kVK_ANSI_H, modifiers: controlKey | optionKey) { [weak self] in
-            self?.settings.visible.toggle()
-        }
-        HotKeys.shared.register(keyCode: kVK_ANSI_T, modifiers: controlKey | optionKey) { [weak self] in
-            self?.settings.clickThrough.toggle()
-        }
-
-        HotKeys.shared.register(keyCode: kVK_ANSI_A, modifiers: controlKey | optionKey) { [weak self] in
-            self?.answers.answerLastTurn()
-        }
-        HotKeys.shared.register(keyCode: kVK_ANSI_X, modifiers: controlKey | optionKey) { [weak self] in
-            self?.answers.dismissCard()
-        }
+        HotKeys.shared.bind(.toggleOverlay) { [weak self] in self?.settings.visible.toggle() }
+        HotKeys.shared.bind(.clickThrough) { [weak self] in self?.settings.clickThrough.toggle() }
+        HotKeys.shared.bind(.answer) { [weak self] in self?.answers.answerLastTurn() }
+        HotKeys.shared.bind(.dismiss) { [weak self] in self?.answers.dismissCard() }
         // 结束面试：和主窗口的"结束"按钮一样。主窗口最小化时不用先把它找回来。
-        HotKeys.shared.register(keyCode: kVK_ANSI_E, modifiers: controlKey | optionKey) { [weak self] in
+        HotKeys.shared.bind(.end) { [weak self] in
             guard let self, self.controller.isRunning else { return }
             Task { await self.controller.stop() }
         }
@@ -100,6 +96,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             Task { await runAutotest() }
         }
         if CommandLine.arguments.contains("--show-mock") { showMock() }
+        if let tab = CommandLine.arguments.first(where: { $0.hasPrefix("--show-settings") }) {
+            showSettings(tab: tab.contains("=") ? String(tab.split(separator: "=")[1]) : nil)
+        }
         // 自测：跑一场两道题的模拟面试，用系统语音外放代替我作答(麦克风要能录到扬声器的声音)
         if CommandLine.arguments.contains("--mock-test") {
             Task { await runMockTest() }
@@ -139,6 +138,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         reviewWindow?.makeKeyAndOrderFront(nil)
     }
 
+    /// 打开设置窗口；tab 不为空时切到那一页
+    @objc func showSettings(tab: String? = nil) {
+        if let tab { UserDefaults.standard.set(tab, forKey: "settingsTab") }
+        if settingsWindow == nil {
+            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 640, height: 480),
+                                  styleMask: [.titled, .closable], backing: .buffered, defer: false)
+            window.title = "设置"
+            window.contentView = NSHostingView(rootView: SettingsView(controller: controller, settings: settings, answers: answers,
+                                                                      resume: resume, checkup: checkup))
+            window.isReleasedWhenClosed = false
+            window.center()
+            settingsWindow = window
+        }
+        checkup.refresh()
+        settingsWindow?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    @objc private func openSettingsFromMenu() { showSettings(tab: nil) }
+
     /// 打开模拟面试窗口
     func showMock() {
         if mockWindow == nil {
@@ -162,8 +181,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private func runMockTest() async {
         showMock()
         mock.config.chinese = CommandLine.arguments.contains("--mode=zh")
-        mock.config.questionCount = 2
-        mock.config.maxFollowUps = 1
+        let quick = CommandLine.arguments.contains("--mock-quick")
+        mock.config.questionCount = quick ? 1 : 2
+        mock.config.maxFollowUps = quick ? 0 : 1
         mock.config.pauseAfterFeedback = false
         // --scripted：不开麦克风，直接把下面的文字当作回答(没有麦克风权限时用)
         let scripted = CommandLine.arguments.contains("--scripted")
@@ -270,6 +290,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         let appItem = NSMenuItem()
         let appMenu = NSMenu()
+        let settingsItem = appMenu.addItem(withTitle: "设置…", action: #selector(openSettingsFromMenu), keyEquivalent: ",")
+        settingsItem.target = self
+        appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "隐藏面试助手", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
         appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "退出面试助手", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")

@@ -12,45 +12,22 @@ final class LogStore: ObservableObject {
     }
 }
 
-/// 主窗口：开始和结束会话，调整悬浮窗
+/// 主窗口：开始和结束会话，以及简历、复盘、模拟面试、设置几个入口。线路、密钥、外观都在设置窗口里。
 struct ControlView: View {
     @ObservedObject var controller: SessionController
-    @ObservedObject var settings: OverlaySettings
     @ObservedObject var log: LogStore
     @ObservedObject var answers: AnswerEngine
     @ObservedObject var resume: ResumeStore
+    @ObservedObject var checkup: Checkup
+    @ObservedObject private var hotKeys = HotKeys.shared
     var openReview: () -> Void = {}
     var openMock: () -> Void = {}
-    /// 会话结束后是否自动做会后处理
-    @AppStorage(LLMModels.key(.qwen, .fast)) private var qwenFast = ""
-    @AppStorage(LLMModels.key(.qwen, .strong)) private var qwenStrong = ""
-    @AppStorage(LLMModels.key(.claude, .fast)) private var claudeFast = ""
-    @AppStorage(LLMModels.key(.claude, .strong)) private var claudeStrong = ""
-    @State private var showingModelCheck = false
-    @AppStorage("autoPostProcess") private var autoPost = true
-    @State private var llmKeyInput = ""
-    @State private var llmKeySaved = false
+    var openSettings: (String?) -> Void = { _ in }
 
     @State private var showingResumeManager = false
     /// 日志区域是否展开(记住上次的选择)
     @AppStorage("showLog") private var showLog = true
-
-    /// 收起日志时把窗口缩到刚好放下控件，展开时恢复高度；窗口顶边保持不动
-    private func resizeWindowForLog() {
-        DispatchQueue.main.async {
-            guard let window = NSApp.windows.first(where: { $0.title == "面试助手" }),
-                  let content = window.contentView else { return }
-            let target = showLog ? max(content.fittingSize.height, 680) : content.fittingSize.height
-            var frame = window.frame
-            let delta = target - window.contentLayoutRect.height
-            frame.origin.y -= delta
-            frame.size.height += delta
-            window.setFrame(frame, display: true, animate: true)
-        }
-    }
     @State private var downloadConfig: TranslationSession.Configuration?
-    @State private var keyInput = ""
-    @State private var keySaved = false
     /// 热词表：提高专有名词的转写准确率，下次开始听译时生效
     @AppStorage(Terms.defaultsKey) private var terms = ""
     /// 实际生效的热词数(手动的加两份简历的，去重后)
@@ -58,12 +35,19 @@ struct ControlView: View {
         _ = terms; _ = resume.terms
         return Terms.load().count
     }
-    /// 阿里云接入地址，留空用默认地址(控制台给了专属地址时填这里)
-    @AppStorage(AliyunASR.endpointDefaultsKey) private var aliyunEndpoint = ""
 
-    private func refreshKeyState() {
-        keyInput = ""
-        keySaved = controller.line.keyAccount.map(KeyStore.has) ?? false
+    /// 收起日志时把窗口缩到刚好放下控件，展开时恢复高度；窗口顶边保持不动
+    private func resizeWindowForLog() {
+        DispatchQueue.main.async {
+            guard let window = NSApp.windows.first(where: { $0.title == "面试助手" }),
+                  let content = window.contentView else { return }
+            let target = showLog ? max(content.fittingSize.height, 520) : content.fittingSize.height
+            var frame = window.frame
+            let delta = target - window.contentLayoutRect.height
+            frame.origin.y -= delta
+            frame.size.height += delta
+            window.setFrame(frame, display: true, animate: true)
+        }
     }
 
     var body: some View {
@@ -84,79 +68,29 @@ struct ControlView: View {
                 .disabled(controller.isBusy)
 
                 Text(controller.status).foregroundStyle(.secondary)
+                Spacer()
+                Button("设置…") { openSettings(nil) }
             }
 
-            HStack {
-                Picker("转写线路", selection: $controller.line) {
-                    ForEach(ASRLine.allCases) { Text($0.title).tag($0) }
-                }
-                .frame(width: 300)
-                .disabled(controller.isRunning || controller.isBusy)
-
-                if let account = controller.line.keyAccount {
-                    SecureField(keySaved ? "已保存，重新输入可替换" : "粘贴 API Key", text: $keyInput)
-                        .frame(width: 200)
-                    Button("保存") {
-                        keySaved = KeyStore.set(keyInput, for: account) && !keyInput.isEmpty
-                        keyInput = ""
-                        Log.write(keySaved ? "API Key 已保存" : "API Key 已清除")
+            // 权限或密钥有问题时在这里提醒，点进去处理
+            if !checkup.problems.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(checkup.problems, id: \.self) { problem in
+                        Label(problem, systemImage: "exclamationmark.triangle.fill")
                     }
-                    Text(keySaved ? "密钥已保存" : "未填密钥").foregroundStyle(keySaved ? .green : .orange)
+                    Button("去处理…") { openSettings("checkup") }
                 }
+                .font(.callout)
+                .foregroundStyle(.orange)
+                .padding(8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(RoundedRectangle(cornerRadius: 6).fill(Color.orange.opacity(0.1)))
             }
-            .onAppear { refreshKeyState() }
-            .onChange(of: controller.line) { refreshKeyState() }
-
-            if controller.line == .aliyun {
-                HStack {
-                    Text("接入地址").foregroundStyle(.secondary)
-                    TextField(AliyunASR.defaultEndpoint, text: $aliyunEndpoint)
-                        .textFieldStyle(.roundedBorder)
-                        .disabled(controller.isRunning)
-                }
-                .font(.caption)
-            }
-
-            Divider()
 
             HStack {
                 Toggle("实时答案", isOn: $answers.enabled)
-                Picker("大模型", selection: $answers.llmLine) {
-                    ForEach(LLMLine.allCases) { Text($0.title).tag($0) }
-                }
-                .frame(width: 300)
-                .disabled(controller.isRunning)
-                if answers.llmLine == .claude {
-                    SecureField(llmKeySaved ? "已保存，重新输入可替换" : "粘贴 Anthropic API Key", text: $llmKeyInput)
-                        .frame(width: 180)
-                    Button("保存") {
-                        llmKeySaved = KeyStore.set(llmKeyInput, for: LLMLine.claude.keyAccount) && !llmKeyInput.isEmpty
-                        llmKeyInput = ""
-                    }
-                }
-            }
-            .onAppear { llmKeySaved = KeyStore.has(LLMLine.claude.keyAccount) }
-
-            HStack {
-                Text("模型").foregroundStyle(.secondary)
-                Text("快档")
-                TextField(LLMModels.defaultName(answers.llmLine, .fast),
-                          text: answers.llmLine == .qwen ? $qwenFast : $claudeFast)
-                    .textFieldStyle(.roundedBorder).frame(width: 170)
-                Text("强档")
-                TextField(LLMModels.defaultName(answers.llmLine, .strong),
-                          text: answers.llmLine == .qwen ? $qwenStrong : $claudeStrong)
-                    .textFieldStyle(.roundedBorder).frame(width: 170)
-                if answers.llmLine == .qwen {
-                    Button("检测新模型…") { showingModelCheck = true }
-                }
-                Text("留空用默认").foregroundStyle(.secondary)
-            }
-            .font(.caption)
-            .disabled(controller.isRunning)
-            .onAppear { if CommandLine.arguments.contains("--show-model-check") { showingModelCheck = true } }
-            .sheet(isPresented: $showingModelCheck) {
-                ModelCheckView { showingModelCheck = false }
+                Text("\(hotKeys.display(.answer)) 回答上一句，\(hotKeys.display(.dismiss)) 关闭答案")
+                    .font(.caption).foregroundStyle(.secondary)
             }
 
             HStack {
@@ -164,8 +98,6 @@ struct ControlView: View {
                 Text(ResumeSlot.allCases.map { "\($0.title)\(resume.texts[$0] == nil ? "未导入" : "已导入")" }.joined(separator: "，")
                      + "，热词 \(termCount) 个")
                     .foregroundStyle(.secondary)
-                Spacer()
-                Text("⌃⌥A 回答上一句，⌃⌥X 关闭答案").font(.caption).foregroundStyle(.secondary)
             }
             // 调试用：启动后直接打开管理界面，方便截图检查
             .onAppear { if CommandLine.arguments.contains("--show-resume-manager") { showingResumeManager = true } }
@@ -178,8 +110,6 @@ struct ControlView: View {
             HStack {
                 Button("历史与复盘…") { openReview() }
                 Button("模拟面试…") { openMock() }.disabled(controller.isRunning)
-                Toggle("结束后自动整理(重新转写、翻译、问答评价和纪要)", isOn: $autoPost)
-                Spacer()
             }
 
             if controller.translationNeedsDownload {
@@ -192,33 +122,8 @@ struct ControlView: View {
                 }
             }
 
-            Divider()
-
-            Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 8) {
-                GridRow {
-                    Toggle("显示悬浮窗", isOn: $settings.visible)
-                    Toggle("共享和截屏时隐藏", isOn: $settings.hideFromSharing)
-                }
-                GridRow {
-                    Toggle("显示原文", isOn: $settings.showSource)
-                    Toggle("鼠标穿透", isOn: $settings.clickThrough)
-                }
-                GridRow {
-                    Toggle("录制麦克风(会后处理用)", isOn: $controller.recordMic)
-                        .disabled(controller.isRunning)
-                    Stepper("显示 \(settings.maxLines) 段", value: $settings.maxLines, in: 1...8)
-                }
-                GridRow {
-                    Slider(value: $settings.fontSize, in: 12...36) { Text("字号 \(Int(settings.fontSize))") }
-                    // 从 0 开始，滑块位置和百分比才对得上
-                    Slider(value: $settings.opacity, in: 0...1) {
-                        Text("背景不透明度 \(Int((settings.opacity * 100).rounded()))%")
-                    }
-                }
-            }
-
             HStack {
-                Text("悬浮窗在开始后出现，主窗口同时收进程序坞；结束后悬浮窗收起，主窗口回来。快捷键：⌃⌥E 结束，⌃⌥H 显示或隐藏悬浮窗，⌃⌥T 切换鼠标穿透。悬浮窗可直接拖动，拖边缘可调整大小。")
+                Text("开始后悬浮窗出现，主窗口收进程序坞；结束后恢复。\(hotKeys.display(.end)) 结束，\(hotKeys.display(.toggleOverlay)) 显示或隐藏悬浮窗，\(hotKeys.display(.clickThrough)) 切换鼠标穿透。")
                     .font(.caption).foregroundStyle(.secondary)
                 Spacer()
                 Button("退出应用") { NSApp.terminate(nil) }
@@ -254,9 +159,12 @@ struct ControlView: View {
             }
         }
         .padding(16)
-        .frame(minWidth: 720, minHeight: showLog ? 600 : nil, alignment: .top)
+        .frame(minWidth: 720, minHeight: showLog ? 440 : nil, alignment: .top)
         // 上次是收起状态时，启动后也把窗口缩到合适的高度
-        .onAppear { if !showLog { resizeWindowForLog() } }
+        .onAppear {
+            checkup.refresh()
+            if !showLog { resizeWindowForLog() }
+        }
         .translationTask(downloadConfig) { session in
             do {
                 try await session.prepareTranslation()

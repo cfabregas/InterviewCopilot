@@ -234,9 +234,9 @@ final class MockInterview: ObservableObject {
         await withCheckedContinuation { finishSignal = $0 }
         guard !skipRequested, !endRequested else { return "" }
 
-        // 最后半句可能还没定稿：最多等 1.5 秒
+        // 最后一句往往还没定稿(云端要等几秒静音才定稿)，没定稿的中间结果可能缺字：最多等 4 秒
         status = "正在收尾…"
-        for _ in 0..<15 where !partial.isEmpty { try? await Task.sleep(nanoseconds: 100_000_000) }
+        for _ in 0..<40 where !partial.isEmpty { try? await Task.sleep(nanoseconds: 100_000_000) }
         return currentAnswer()
     }
 
@@ -325,15 +325,32 @@ final class MockInterview: ObservableObject {
         let dialogue = thread.map { "面试官：\($0.question)\n候选人：\($0.answer.isEmpty ? "(没有回答)" : $0.answer)" }.joined(separator: "\n\n")
         do {
             let reply = try await llm.complete(system: system, user: background + "\n\n<dialogue>\n\(dialogue)\n</dialogue>", tier: .strong)
-            guard let start = reply.firstIndex(of: "{"), let end = reply.lastIndex(of: "}"),
-                  let object = parseJSON(String(reply[start...end])) else {
-                return (reply.trimmingCharacters(in: .whitespacesAndNewlines), "")
+            var feedback = ""
+            var followUp = ""
+            if let start = reply.firstIndex(of: "{"), let end = reply.lastIndex(of: "}"),
+               let object = parseJSON(String(reply[start...end])) {
+                feedback = object["feedback"] as? String ?? ""
+                followUp = object["followup"] as? String ?? ""
+            } else {
+                // 模型偶尔在点评里用了没转义的引号，整段不是合法 JSON：按字段名把两段文字切出来
+                feedback = Self.field("feedback", in: reply, before: "\"followup\"") ?? reply
+                followUp = Self.field("followup", in: reply, before: nil) ?? ""
             }
-            let followUp = canFollowUp ? (object["followup"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines) : ""
-            return (object["feedback"] as? String ?? "", followUp)
+            followUp = canFollowUp ? followUp.trimmingCharacters(in: .whitespacesAndNewlines) : ""
+            return (feedback.trimmingCharacters(in: .whitespacesAndNewlines), followUp)
         } catch {
             return ("点评生成失败：\(error)", "")
         }
+    }
+
+    /// 从不合法的 JSON 里取出某个字符串字段：从 "name": " 之后，到下一个字段名(或结尾的引号)之前
+    nonisolated static func field(_ name: String, in reply: String, before next: String?) -> String? {
+        guard let key = reply.range(of: "\"\(name)\""),
+              let open = reply[key.upperBound...].firstIndex(of: "\"") else { return nil }
+        var rest = reply[reply.index(after: open)...]
+        if let next, let stop = rest.range(of: next) { rest = rest[..<stop.lowerBound] }
+        guard let close = rest.lastIndex(of: "\"") else { return nil }
+        return String(rest[..<close]).replacingOccurrences(of: "\\n", with: "\n").replacingOccurrences(of: "\\\"", with: "\"")
     }
 
     // MARK: - 麦克风和转写
@@ -422,10 +439,13 @@ final class MockInterview: ObservableObject {
     }
 
     private func handle(_ event: ASREvent) {
-        guard phase == .answering || status == "正在收尾…" else { return }
+        let text = event.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if event.kind == .final, CommandLine.arguments.contains("--mock-test") {
+            Log.write("  [转写定稿 \(event.startMs)–\(event.endMs) ms，作答从 \(answerStartMs) ms 起，阶段 \(phase)] \(text)")
+        }
+        guard phase == .answering else { return }
         // 朗读问题时麦克风也在收音：开始作答之前的内容不算
         if event.endMs >= 0, event.endMs < answerStartMs { return }
-        let text = event.text.trimmingCharacters(in: .whitespacesAndNewlines)
         switch event.kind {
         case .partial:
             partial = text
