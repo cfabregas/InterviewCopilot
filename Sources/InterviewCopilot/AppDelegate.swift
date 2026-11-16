@@ -12,6 +12,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private lazy var post = PostProcessor(answers: answers)
     private let reviewModel = ReviewModel()
     private var reviewWindow: NSWindow?
+    private lazy var mock = MockInterview(answers: answers, resume: resume, post: post)
+    private var mockWindow: NSWindow?
     private var cardObserver: AnyCancellable?
     private var runningObserver: AnyCancellable?
     private let settings = OverlaySettings()
@@ -32,7 +34,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window.title = "面试助手"
         window.contentView = NSHostingView(rootView: ControlView(controller: controller, settings: settings, log: logStore,
                                                                   answers: answers, resume: resume,
-                                                                  openReview: { [weak self] in self?.showReview() }))
+                                                                  openReview: { [weak self] in self?.showReview() },
+                                                                  openMock: { [weak self] in self?.showMock() }))
         window.center()
         window.isReleasedWhenClosed = false
         window.delegate = self
@@ -96,6 +99,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if CommandLine.arguments.contains("--autotest") {
             Task { await runAutotest() }
         }
+        if CommandLine.arguments.contains("--show-mock") { showMock() }
+        // 自测：跑一场两道题的模拟面试，用系统语音外放代替我作答(麦克风要能录到扬声器的声音)
+        if CommandLine.arguments.contains("--mock-test") {
+            Task { await runMockTest() }
+        }
         // 自测：检测可用的通义千问模型，结果写进日志后退出
         if CommandLine.arguments.contains("--probe-models") {
             Task {
@@ -129,6 +137,80 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
         reviewModel.reload()
         reviewWindow?.makeKeyAndOrderFront(nil)
+    }
+
+    /// 打开模拟面试窗口
+    func showMock() {
+        if mockWindow == nil {
+            mock.realSessionRunning = { [weak self] in self?.controller.isRunning ?? false }
+            mock.asrLine = { [weak self] in self?.controller.line ?? .auto }
+            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 720, height: 620),
+                                  styleMask: [.titled, .closable, .miniaturizable, .resizable],
+                                  backing: .buffered, defer: false)
+            window.title = "模拟面试"
+            window.contentView = NSHostingView(rootView: MockInterviewView(mock: mock, resume: resume) { [weak self] id in
+                self?.reviewModel.selectedID = id
+                self?.showReview()
+            })
+            window.isReleasedWhenClosed = false
+            window.center()
+            mockWindow = window
+        }
+        mockWindow?.makeKeyAndOrderFront(nil)
+    }
+
+    private func runMockTest() async {
+        showMock()
+        mock.config.chinese = CommandLine.arguments.contains("--mode=zh")
+        mock.config.questionCount = 2
+        mock.config.maxFollowUps = 1
+        mock.config.pauseAfterFeedback = false
+        // --scripted：不开麦克风，直接把下面的文字当作回答(没有麦克风权限时用)
+        let scripted = CommandLine.arguments.contains("--scripted")
+        Log.write("=== 模拟面试自测开始\(scripted ? "(不开麦克风)" : "") ===")
+        let english = [
+            "Sure. In my last role I led the frontend of a self service analytics platform. I designed a schema driven chart builder, and adoption passed fifty percent in the first month.",
+            "The hardest part was keeping the form, the chart and the server in sync. We used a single schema as the source of truth and validated every change before rendering.",
+            "I would measure first, then batch updates with request animation frame and only re-render rows that changed.",
+        ]
+        let chinese = [
+            "好的。我上一份工作负责一个自助分析平台的前端，设计了基于配置的图表搭建器，上线第一个月使用率超过一半。",
+            "最难的是让表单、图表和服务端保持一致。我们用一份配置作为唯一数据源，每次修改先校验再渲染。",
+            "我会先测量，再用批量更新，只重新渲染变化的行。",
+        ]
+        if scripted { mock.scriptedAnswers = mock.config.chinese ? chinese : english }
+        mock.start()
+        var answered = 0
+        var lastTurn = -1
+        while mock.phase != .finished && mock.phase != .idle {
+            if !scripted, mock.phase == .answering, let turn = mock.turns.last, turn.id != lastTurn {
+                lastTurn = turn.id
+                let lines = mock.config.chinese ? chinese : english
+                let text = lines[answered % lines.count]
+                answered += 1
+                try? await Task.sleep(nanoseconds: 600_000_000)
+                await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                    let say = Process()
+                    say.executableURL = URL(fileURLWithPath: "/usr/bin/say")
+                    say.arguments = ["-v", mock.config.chinese ? "Tingting" : "Daniel", "-r", "180", text]
+                    say.terminationHandler = { _ in continuation.resume() }
+                    do { try say.run() } catch { continuation.resume() }
+                }
+                try? await Task.sleep(nanoseconds: 800_000_000)
+                mock.finishAnswer()
+            }
+            try? await Task.sleep(nanoseconds: 200_000_000)
+        }
+        for turn in mock.turns {
+            Log.write("  第 \(turn.number) 题\(turn.followUp > 0 ? " 追问 \(turn.followUp)" : "") [\(turn.kind)] \(turn.question)")
+            Log.write("    回答：\(turn.answer)")
+            Log.write("    点评：\(turn.feedback)")
+        }
+        Log.write("=== 模拟面试自测结束：\(mock.status) ===")
+        if !CommandLine.arguments.contains("--stay") {
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            NSApp.terminate(nil)
+        }
     }
 
     /// 自测：把一个目录里的 system.m4a / mic.m4a 当作一场刚结束的面试，跑一遍会后处理

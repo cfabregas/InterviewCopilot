@@ -20,6 +20,7 @@ struct ControlView: View {
     @ObservedObject var answers: AnswerEngine
     @ObservedObject var resume: ResumeStore
     var openReview: () -> Void = {}
+    var openMock: () -> Void = {}
     /// 会话结束后是否自动做会后处理
     @AppStorage(LLMModels.key(.qwen, .fast)) private var qwenFast = ""
     @AppStorage(LLMModels.key(.qwen, .strong)) private var qwenStrong = ""
@@ -176,6 +177,7 @@ struct ControlView: View {
 
             HStack {
                 Button("历史与复盘…") { openReview() }
+                Button("模拟面试…") { openMock() }.disabled(controller.isRunning)
                 Toggle("结束后自动整理(重新转写、翻译、问答评价和纪要)", isOn: $autoPost)
                 Spacer()
             }
