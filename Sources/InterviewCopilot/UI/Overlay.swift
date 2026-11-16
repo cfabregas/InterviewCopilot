@@ -92,7 +92,7 @@ struct AnswerCardView: View {
                     .foregroundStyle(.white.opacity(0.55))
                     .lineLimit(2)
                 if card.text.isEmpty, card.error == nil {
-                    Text("正在准备回答…")
+                    Text(L("正在准备回答…"))
                         .font(.system(size: fontSize * 0.75))
                         .foregroundStyle(.white.opacity(0.6))
                 }
@@ -109,7 +109,7 @@ struct AnswerCardView: View {
                         .lineSpacing(3)
                 }
                 if let error = card.error {
-                    Text("答案生成失败：" + error)
+                    Text(L("答案生成失败：") + error)
                         .font(.system(size: fontSize * 0.6))
                         .foregroundStyle(Color(red: 1, green: 0.5, blue: 0.45))
                         .lineLimit(3)
@@ -142,7 +142,7 @@ struct SubtitleOverlayView: View {
             if controller.lines.isEmpty {
                 HStack(spacing: 8) {
                     TallyLamp(on: controller.isRunning, size: 8)
-                    Text(controller.isRunning ? "正在听…" : "未开始")
+                    Text(controller.isRunning ? L("正在听…") : L("未开始"))
                         .font(.system(size: settings.fontSize * 0.75))
                         .foregroundStyle(.white.opacity(0.6))
                 }

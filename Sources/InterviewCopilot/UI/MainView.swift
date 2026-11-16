@@ -8,11 +8,11 @@ enum Page: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .listen: return "听译"
-        case .mock: return "模拟面试"
-        case .review: return "复盘"
-        case .resume: return "简历与热词"
-        case .settings: return "设置"
+        case .listen: return L("听译")
+        case .mock: return L("模拟面试")
+        case .review: return L("复盘")
+        case .resume: return L("简历与热词")
+        case .settings: return L("设置")
         }
     }
 
@@ -49,6 +49,7 @@ struct MainView: View {
     @ObservedObject var post: PostProcessor
     @ObservedObject var reviewModel: ReviewModel
     @ObservedObject var mock: MockInterview
+    @ObservedObject private var l10n = L10n.shared
 
     var body: some View {
         HStack(spacing: 0) {
@@ -74,6 +75,8 @@ struct MainView: View {
             .background(Theme.paper)
         }
         .tint(Theme.accent)
+        // 换语言后整个界面重建一遍
+        .id(l10n.code)
         .frame(minWidth: 1040, minHeight: 680)
         .ignoresSafeArea()
     }
@@ -82,7 +85,7 @@ struct MainView: View {
         VStack(alignment: .leading, spacing: 2) {
             // 给窗口左上角的三个按钮让出位置
             Color.clear.frame(height: 46)
-            Text("面试助手")
+            Text(L("面试助手"))
                 .font(Theme.display(20))
                 .foregroundStyle(Theme.onCurtain)
                 .padding(.horizontal, 18)
@@ -98,7 +101,7 @@ struct MainView: View {
                 } label: {
                     HStack(alignment: .top, spacing: 8) {
                         Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Theme.cue)
-                        Text("有 \(checkup.problems.count) 项需要处理").foregroundStyle(Theme.onCurtain)
+                        Text(L("有 %@ 项需要处理", "\(checkup.problems.count)")).foregroundStyle(Theme.onCurtain)
                     }
                     .font(.system(size: 12))
                     .padding(10)

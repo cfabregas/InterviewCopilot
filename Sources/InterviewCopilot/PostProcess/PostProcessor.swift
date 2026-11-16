@@ -355,7 +355,7 @@ final class PostProcessor: ObservableObject {
                     guard pair.kind != "反问" else { return (index, item) }
                     let user = "面试问题：\n\(pair.question)\n\n候选人的回答：\n\(pair.answer.isEmpty ? "(没有录到回答)" : pair.answer)"
                     do {
-                        let reply = try await llm.complete(system: evaluationSystem, user: user, tier: .strong)
+                        let reply = try await llm.complete(system: evaluationSystem + L10n.shared.promptNote, user: user, tier: .strong)
                         let sections = Self.sections(reply)
                         item.score = Int(sections["评分"]?.filter(\.isNumber).prefix(1) ?? "") ?? 0
                         let advice = sections["改进建议"] ?? ""
@@ -394,7 +394,7 @@ final class PostProcessor: ObservableObject {
         """
         let scores = done.filter { $0.kind != "反问" }.map { "- [\($0.kind)] \($0.question)(评分 \($0.score == 0 ? "无" : String($0.score)))" }
             .joined(separator: "\n")
-        let summaryReply = try await llm.complete(system: summarySystem,
+        let summaryReply = try await llm.complete(system: summarySystem + L10n.shared.promptNote,
                                                   user: "<transcript>\n\(transcript)\n</transcript>\n\n<scores>\n\(scores)\n</scores>",
                                                   tier: .strong)
         var lines = summaryReply.trimmingCharacters(in: .whitespacesAndNewlines).components(separatedBy: "\n")

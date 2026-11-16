@@ -8,7 +8,7 @@ enum ResumeSlot: String, CaseIterable, Identifiable {
     case zh
 
     var id: String { rawValue }
-    var title: String { self == .en ? "英文简历" : "中文简历" }
+    var title: String { self == .en ? L("英文简历") : L("中文简历") }
     fileprivate var file: URL { AppPaths.root.appendingPathComponent("resume-\(rawValue).txt") }
     fileprivate var nameKey: String { "resumeFileName.\(rawValue)" }
     fileprivate var termsKey: String { "resumeTerms.\(rawValue)" }
@@ -69,22 +69,22 @@ final class ResumeStore: ObservableObject {
         let preferred: ResumeSlot = mode == .enToZh ? .en : .zh
         let other: ResumeSlot = preferred == .en ? .zh : .en
         if texts[preferred] != nil { return "\(preferred.title) \(length(preferred))" }
-        if texts[other] != nil { return "没有\(preferred.title)，改用\(other.title) \(length(other))" }
-        return "未导入简历(只能给通用回答)"
+        if texts[other] != nil { return L("没有%@，改用%@ %@", "\(preferred.title)", "\(other.title)", "\(length(other))") }
+        return L("未导入简历(只能给通用回答)")
     }
 
     /// 简历长度：英文按单词数，中文按字数(不算空白)
     func length(_ slot: ResumeSlot) -> String {
         let text = texts[slot] ?? ""
         if slot == .en {
-            return "\(text.split(whereSeparator: { $0.isWhitespace }).filter { $0.contains(where: \.isLetter) }.count) 词"
+            return L("%@ 词", "\(text.split(whereSeparator: { $0.isWhitespace }).filter { $0.contains(where: \.isLetter) }.count)")
         }
-        return "\(text.filter { !$0.isWhitespace }.count) 字"
+        return L("%@ 字", "\(text.filter { !$0.isWhitespace }.count)")
     }
 
     func summary(_ slot: ResumeSlot) -> String {
-        guard texts[slot] != nil else { return "未导入" }
-        return "\(fileNames[slot] ?? "")(\(length(slot))，热词 \(terms[slot]?.count ?? 0) 个)"
+        guard texts[slot] != nil else { return L("未导入") }
+        return L("%@(%@，热词 %@ 个)", fileNames[slot] ?? "", length(slot), "\(terms[slot]?.count ?? 0)")
     }
 
     /// 从文件读出文字。支持 PDF、Word、RTF 和纯文本。
@@ -92,7 +92,7 @@ final class ResumeStore: ObservableObject {
         let content: String
         if url.pathExtension.lowercased() == "pdf" {
             guard let document = PDFDocument(url: url), let string = document.string else {
-                throw AppError("读不出这个 PDF 的文字(可能是扫描件)")
+                throw AppError(L("读不出这个 PDF 的文字(可能是扫描件)"))
             }
             content = string
         } else if ["txt", "md"].contains(url.pathExtension.lowercased()) {
@@ -101,7 +101,7 @@ final class ResumeStore: ObservableObject {
             content = try NSAttributedString(url: url, options: [:], documentAttributes: nil).string
         }
         let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.count >= 50 else { throw AppError("文件里几乎没有文字") }
+        guard trimmed.count >= 50 else { throw AppError(L("文件里几乎没有文字")) }
         return trimmed
     }
 

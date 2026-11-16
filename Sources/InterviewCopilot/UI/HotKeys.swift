@@ -9,11 +9,11 @@ enum HotKeyAction: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .end: return "结束面试"
-        case .toggleOverlay: return "显示或隐藏悬浮窗"
-        case .clickThrough: return "切换鼠标穿透"
-        case .answer: return "回答上一句"
-        case .dismiss: return "关闭答案卡"
+        case .end: return L("结束面试")
+        case .toggleOverlay: return L("显示或隐藏悬浮窗")
+        case .clickThrough: return L("切换鼠标穿透")
+        case .answer: return L("回答上一句")
+        case .dismiss: return L("关闭答案卡")
         }
     }
 
@@ -53,7 +53,7 @@ struct KeyCombo: Codable, Equatable {
         if flags.contains(.shift) { modifiers |= shiftKey }
         if flags.contains(.command) { modifiers |= cmdKey }
         guard modifiers & (controlKey | optionKey | cmdKey) != 0 else { return nil }
-        let names: [Int: String] = [kVK_Space: "空格", kVK_Return: "↩", kVK_Tab: "⇥", kVK_Delete: "⌫",
+        let names: [Int: String] = [kVK_Space: L("空格"), kVK_Return: "↩", kVK_Tab: "⇥", kVK_Delete: "⌫",
                                     kVK_LeftArrow: "←", kVK_RightArrow: "→", kVK_UpArrow: "↑", kVK_DownArrow: "↓"]
         let code = Int(event.keyCode)
         let label = names[code] ?? (event.charactersIgnoringModifiers ?? "").uppercased()

@@ -33,7 +33,7 @@ final class SessionController: ObservableObject {
     @Published var lines: [SubtitleLine] = []
     @Published var isRunning = false
     @Published var isBusy = false
-    @Published var status = "未开始"
+    @Published var status = L("未开始")
     @Published var mode: LanguageMode = .enToZh
     @Published var line: ASRLine = .initial {
         didSet { UserDefaults.standard.set(line.rawValue, forKey: "asrLine") }
@@ -86,7 +86,7 @@ final class SessionController: ObservableObject {
         guard !isRunning, !isBusy else { return }
         isBusy = true
         defer { isBusy = false }
-        status = "正在准备…"
+        status = L("正在准备…")
         lines = []
         openLineID = nil
 
@@ -108,7 +108,7 @@ final class SessionController: ObservableObject {
                 Log.write("系统不支持该语言对的本地翻译，本次只转写。")
             }
 
-            status = line == .local ? "正在加载转写模型(首次可能要一分钟)…" : "正在连接云端转写…"
+            status = line == .local ? L("正在加载转写模型(首次可能要一分钟)…") : L("正在连接云端转写…")
             let asr = try await makeASR()
             try await asr.start(locale: mode.sourceLocale)
             splitter = SentenceSplitter()
@@ -122,7 +122,7 @@ final class SessionController: ObservableObject {
 
             // 系统声音：采集后同时送去录音和转写
             // 放到后台线程：系统权限弹窗没处理时，这一步会阻塞很久
-            status = "正在启动系统声音采集(如有权限弹窗请点允许)…"
+            status = L("正在启动系统声音采集(如有权限弹窗请点允许)…")
             let tap = self.tap
             let format = try await Task.detached { try tap.start() }.value
             let recorder = try AudioFileRecorder(url: dir.appendingPathComponent("system.m4a"), format: format)
@@ -176,18 +176,18 @@ final class SessionController: ObservableObject {
                         // 连续 15 秒静音时提醒一次
                         if silentChecks == 3, !everHeard {
                             Log.write("开始后 15 秒一直没有采到系统声音。如果对方正在说话，请到 系统设置 → 隐私与安全性 → "
-                                      + "屏幕与系统音频录制 里允许本应用录制系统音频，然后重新开始。")
-                            self.status = "没有采到声音，请检查系统音频录制权限"
+                                      + L("屏幕与系统音频录制 里允许本应用录制系统音频，然后重新开始。"))
+                            self.status = L("没有采到声音，请检查系统音频录制权限")
                         }
                     }
                 }
             }
             isRunning = true
             answers.sessionStarted(mode: mode)
-            status = (translator == nil ? "正在听(仅转写)" : "正在听译") + " · " + route
+            status = (translator == nil ? L("正在听(仅转写)") : L("正在听译")) + " · " + route
             Log.write("会话开始：\(mode.title)，目录 \(dir.lastPathComponent)")
         } catch {
-            status = "启动失败：\(error)"
+            status = L("启动失败：%@", "\(error)")
             Log.write("启动失败：\(error)")
             await teardown()
         }
@@ -197,11 +197,11 @@ final class SessionController: ObservableObject {
         guard isRunning, !isBusy else { return }
         isBusy = true
         defer { isBusy = false }
-        status = "正在结束…"
+        status = L("正在结束…")
         let ended = sessionID
         await teardown()
         isRunning = false
-        status = "已结束"
+        status = L("已结束")
         Log.write("会话结束")
         if ended >= 0 { onSessionEnded?(ended) }
     }
@@ -253,7 +253,7 @@ final class SessionController: ObservableObject {
             return makeLocal()
         }
         guard let key = KeyStore.get(account) else {
-            throw AppError("还没有填写\(chosen.title)的 API Key，请在主窗口填入并保存")
+            throw AppError(L("还没有填写%@的 API Key，请在主窗口填入并保存", "\(chosen.title)"))
         }
         route = chosen.title
         Log.write("转写线路：\(route)(断线时本地兜底)")
@@ -266,7 +266,7 @@ final class SessionController: ObservableObject {
             Task { @MainActor in
                 guard let self, self.isRunning else { return }
                 self.route = description
-                self.status = (self.translator == nil ? "正在听(仅转写)" : "正在听译") + " · " + description
+                self.status = (self.translator == nil ? L("正在听(仅转写)") : L("正在听译")) + " · " + description
             }
         }
         return resilient
@@ -351,10 +351,10 @@ final class SessionController: ObservableObject {
             lines[index].segmentID = segmentID
 
             // 定稿延迟：这句话说完到定稿结果出来过了多久
-            let lagMs = event.endMs >= 0 ? "\(clock.lagMs(audioMs: event.endMs)) ms" : "提前切分"
+            let lagMs = event.endMs >= 0 ? "\(clock.lagMs(audioMs: event.endMs)) ms" : L("提前切分")
             // 中间结果延迟：原文上屏比说话慢多少(取本句各次中间结果的中位数)
             let sorted = partialLagsMs.sorted()
-            let partialLag = sorted.isEmpty ? "无" : "\(sorted[sorted.count / 2]) ms"
+            let partialLag = sorted.isEmpty ? L("无") : "\(sorted[sorted.count / 2]) ms"
             partialLagsMs = []
             Log.write("定稿 [\(event.startMs)–\(event.endMs) ms，定稿延迟 \(lagMs)，中间结果延迟 \(partialLag)] \(text)")
             translateFinal(lineID: lineID, segmentID: segmentID, text: text)

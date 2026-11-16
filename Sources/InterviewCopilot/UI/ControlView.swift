@@ -37,7 +37,7 @@ struct ListenPage: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            PageHeader(title: "听译", subtitle: "听对方说话，实时出字幕、译文和回答提示")
+            PageHeader(title: L("听译"), subtitle: L("听对方说话，实时出字幕、译文和回答提示"))
             VStack(alignment: .leading, spacing: 22) {
                 stagePanel
                 readiness
@@ -68,7 +68,7 @@ struct ListenPage: View {
         VStack(alignment: .leading, spacing: 18) {
             HStack(spacing: 10) {
                 TallyLamp(on: controller.isRunning)
-                Text(controller.isRunning ? controller.status : (controller.isBusy ? controller.status : "待机"))
+                Text(controller.isRunning ? controller.status : (controller.isBusy ? controller.status : L("待机")))
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(Theme.onCurtain)
                     .lineLimit(1)
@@ -83,7 +83,7 @@ struct ListenPage: View {
             // 字幕预览：和悬浮窗里显示的是同一份内容
             VStack(alignment: .leading, spacing: 8) {
                 if controller.lines.isEmpty {
-                    Text(controller.isRunning ? "正在听…" : "开始后，对方说的话会出现在这里和悬浮窗里。")
+                    Text(controller.isRunning ? L("正在听…") : L("开始后，对方说的话会出现在这里和悬浮窗里。"))
                         .font(Theme.script(19))
                         .foregroundStyle(Theme.onCurtainMuted)
                 } else {
@@ -110,14 +110,14 @@ struct ListenPage: View {
                 .frame(width: 230)
                 .disabled(controller.isRunning || controller.isBusy)
 
-                Toggle("实时答案", isOn: $answers.enabled)
+                Toggle(L("实时答案"), isOn: $answers.enabled)
                     .toggleStyle(.switch)
                     .controlSize(.small)
                     .foregroundStyle(Theme.onCurtain)
 
                 Spacer()
 
-                Button(controller.isRunning ? "结束" : "开始听译") {
+                Button(controller.isRunning ? L("结束") : L("开始听译")) {
                     Task {
                         if controller.isRunning { await controller.stop() } else { await controller.start() }
                     }
@@ -141,26 +141,26 @@ struct ListenPage: View {
 
     private var readiness: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SectionRule(title: "准备情况").padding(.bottom, 4)
-            row("转写线路", controller.line.title, good: true) {
-                Button("更改") { open("lines") }.buttonStyle(LinkButtonStyle())
+            SectionRule(title: L("准备情况")).padding(.bottom, 4)
+            row(L("转写线路"), controller.line.title, good: true) {
+                Button(L("更改")) { open("lines") }.buttonStyle(LinkButtonStyle())
             }
-            row("大模型", "\(answers.llmLine == .qwen ? "通义千问" : "Claude")，写答案用 \(LLMModels.name(answers.llmLine, .strong))",
+            row(L("大模型"), L("%@，写答案用 %@", "\(answers.llmLine == .qwen ? L("通义千问") : "Claude")", "\(LLMModels.name(answers.llmLine, .strong))"),
                 good: KeyStore.has(answers.llmLine.keyAccount)) {
-                Button("更改") { open("lines") }.buttonStyle(LinkButtonStyle())
+                Button(L("更改")) { open("lines") }.buttonStyle(LinkButtonStyle())
             }
-            row("简历", ResumeSlot.allCases.map { "\($0.title)\(resume.texts[$0] == nil ? "未导入" : "已导入")" }.joined(separator: "，")
-                + "，热词 \(termCount) 个", good: !resume.texts.isEmpty) {
-                Button("管理") { navigator.page = .resume }.buttonStyle(LinkButtonStyle())
+            row(L("简历"), ResumeSlot.allCases.map { L("%@%@", $0.title, resume.texts[$0] == nil ? L("未导入") : L("已导入")) }.joined(separator: "，")
+                + L("，热词 %@ 个", "\(termCount)"), good: !resume.texts.isEmpty) {
+                Button(L("管理")) { navigator.page = .resume }.buttonStyle(LinkButtonStyle())
             }
             ForEach(checkup.problems, id: \.self) { problem in
-                row("需要处理", problem, good: false) {
-                    Button("去处理") { open("checkup") }.buttonStyle(LinkButtonStyle())
+                row(L("需要处理"), problem, good: false) {
+                    Button(L("去处理")) { open("checkup") }.buttonStyle(LinkButtonStyle())
                 }
             }
             if controller.translationNeedsDownload {
-                row("翻译语言包", "还没有安装，现在只能转写", good: false) {
-                    Button("下载") {
+                row(L("翻译语言包"), L("还没有安装，现在只能转写"), good: false) {
+                    Button(L("下载")) {
                         downloadConfig = TranslationSession.Configuration(source: controller.mode.sourceLanguage,
                                                                           target: controller.mode.targetLanguage)
                     }
@@ -194,7 +194,7 @@ struct ListenPage: View {
 
     private var shortcuts: some View {
         VStack(alignment: .leading, spacing: 10) {
-            SectionRule(title: "面试中用得到的快捷键")
+            SectionRule(title: L("面试中用得到的快捷键"))
             FlowLayout(spacing: 18) {
                 ForEach(HotKeyAction.allCases) { action in
                     HStack(spacing: 6) {
@@ -203,7 +203,7 @@ struct ListenPage: View {
                     }
                 }
             }
-            Text("开始后悬浮窗出现，这个窗口收进程序坞；结束后恢复。")
+            Text(L("开始后悬浮窗出现，这个窗口收进程序坞；结束后恢复。"))
                 .font(.system(size: 12)).foregroundStyle(Theme.muted)
         }
     }
@@ -218,7 +218,7 @@ struct ListenPage: View {
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "chevron.right").rotationEffect(.degrees(showLog ? 90 : 0)).font(.system(size: 10, weight: .semibold))
-                    Text("运行日志").font(.system(size: 12, weight: .medium))
+                    Text(L("运行日志")).font(.system(size: 12, weight: .medium))
                     Spacer()
                 }
                 .foregroundStyle(Theme.muted)
@@ -227,7 +227,7 @@ struct ListenPage: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help(showLog ? "收起日志" : "展开日志")
+            .help(showLog ? L("收起日志") : L("展开日志"))
 
             if showLog {
                 ScrollViewReader { proxy in

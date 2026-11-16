@@ -11,6 +11,19 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS"
 cp "$BIN" "$APP/Contents/MacOS/InterviewCopilot"
 
+# 界面语言文件：每种语言一个 JSON，加语言只需要往 Localizations 目录放一个文件
+mkdir -p "$APP/Contents/Resources/Localizations"
+cp Localizations/*.json "$APP/Contents/Resources/Localizations/"
+# 系统权限弹窗里的说明文字也给一份英文
+mkdir -p "$APP/Contents/Resources/en.lproj" "$APP/Contents/Resources/zh-Hans.lproj"
+cat > "$APP/Contents/Resources/en.lproj/InfoPlist.strings" <<'STRINGS'
+"CFBundleName" = "Interview Copilot";
+"NSAudioCaptureUsageDescription" = "Captures the other side's audio in a meeting for live transcription and translation.";
+"NSMicrophoneUsageDescription" = "Records your own voice for the post-interview review and mock interviews.";
+"NSSpeechRecognitionUsageDescription" = "Transcribes speech to text on this Mac.";
+STRINGS
+touch "$APP/Contents/Resources/zh-Hans.lproj/InfoPlist.strings"
+
 cat > "$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -18,6 +31,7 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <dict>
     <key>CFBundleIdentifier</key><string>local.interviewcopilot.app</string>
     <key>CFBundleName</key><string>面试助手</string>
+    <key>CFBundleDevelopmentRegion</key><string>zh-Hans</string>
     <key>CFBundleExecutable</key><string>InterviewCopilot</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>0.1</string>

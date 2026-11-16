@@ -235,7 +235,7 @@ final class AnswerEngine: ObservableObject {
             var gotFirst = false
             var full = ""
             do {
-                for try await piece in llm.stream(system: system, user: user, tier: .strong) {
+                for try await piece in llm.stream(system: system + L10n.shared.promptNote, user: user, tier: .strong) {
                     guard let self, self.generationID == id else { return }
                     if !gotFirst {
                         gotFirst = true

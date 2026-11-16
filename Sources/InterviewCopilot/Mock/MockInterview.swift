@@ -6,6 +6,7 @@ struct MockConfig {
     enum Level: String, CaseIterable, Identifiable {
         case junior = "初级", mid = "中级", senior = "高级", staff = "资深或负责人"
         var id: String { rawValue }
+        var title: String { L(rawValue) }
     }
 
     var chinese = false          // 面试语言：false 英文，true 中文
@@ -84,18 +85,18 @@ final class MockInterview: ObservableObject {
 
     private var mode: LanguageMode { config.chinese ? .zhToEn : .enToZh }
     private var nowMs: Int { Int(Date().timeIntervalSince(startedAt) * 1000) }
-    private var languageName: String { config.chinese ? "中文" : "英文" }
+    private var languageName: String { config.chinese ? "中文" : "英文" }   // 写进提示词里的，不翻译
 
     // MARK: - 对外的操作
 
     func start() {
         guard !isActive else { return }
         guard !realSessionRunning() else {
-            status = "真实面试正在进行，结束后才能开始模拟面试"
+            status = L("真实面试正在进行，结束后才能开始模拟面试")
             return
         }
         guard let llm = answers.llmLine.makeClient() else {
-            status = "还没有填写\(answers.llmLine.title)的密钥，无法出题"
+            status = L("还没有填写%@的密钥，无法出题", "\(answers.llmLine.title)")
             return
         }
         turns = []
@@ -164,12 +165,12 @@ final class MockInterview: ObservableObject {
 
     private func run(_ llm: LLMClient) async {
         do {
-            status = "正在出题…"
+            status = L("正在出题…")
             let questions = try await makeQuestions(llm)
             total = questions.count
             Log.write("模拟面试：\(languageName)，\(config.level.rawValue)，出题 \(questions.count) 道")
 
-            status = "正在打开麦克风和转写…"
+            status = L("正在打开麦克风和转写…")
             try await startAudio()
             // 提前把后面几道题的语音合成好，问的时候不用等
             for (question, _) in questions { prefetch(question) }
@@ -185,7 +186,7 @@ final class MockInterview: ObservableObject {
                     }
                     turns[turns.count - 1].answer = answer
                     phase = .reviewing
-                    status = "正在点评…"
+                    status = L("正在点评…")
                     let thread = turns.filter { $0.number == turn.number }
                     let review = await self.review(llm, thread: thread, canFollowUp: turn.followUp < config.maxFollowUps)
                     turns[turns.count - 1].feedback = review.feedback
@@ -193,7 +194,7 @@ final class MockInterview: ObservableObject {
                     if !review.followUp.isEmpty { prefetch(review.followUp) }
                     if config.pauseAfterFeedback, !endRequested {
                         phase = .waiting
-                        status = "看完点评后点\"继续\""
+                        status = L("看完点评后点\"继续\"")
                         await withCheckedContinuation { continueSignal = $0 }
                     }
                     guard !review.followUp.isEmpty else { break }
@@ -204,7 +205,7 @@ final class MockInterview: ObservableObject {
             await wrapUp()
         } catch {
             Log.write("模拟面试出错：\(error)")
-            status = "出错了：\(error)"
+            status = L("出错了：%@", "\(error)")
             await stopAudio()
             phase = .idle
         }
@@ -213,7 +214,7 @@ final class MockInterview: ObservableObject {
     /// 朗读问题，然后等用户答完，返回转写出来的回答
     private func ask(_ question: String) async -> String {
         phase = .asking
-        status = "面试官正在提问…"
+        status = L("面试官正在提问…")
         liveAnswer = ""
         if let id = sessionID {
             _ = Store.shared?.insertSegment(session: id, channel: "system", startMs: nowMs, endMs: nowMs,
@@ -230,12 +231,12 @@ final class MockInterview: ObservableObject {
             try? await Task.sleep(nanoseconds: 1_500_000_000)
             return liveAnswer
         }
-        status = "请作答，答完点\"答完了\"或按回车"
+        status = L("请作答，答完点\"答完了\"或按回车")
         await withCheckedContinuation { finishSignal = $0 }
         guard !skipRequested, !endRequested else { return "" }
 
         // 最后一句往往还没定稿(云端要等几秒静音才定稿)，没定稿的中间结果可能缺字：最多等 4 秒
-        status = "正在收尾…"
+        status = L("正在收尾…")
         for _ in 0..<40 where !partial.isEmpty { try? await Task.sleep(nanoseconds: 100_000_000) }
         return currentAnswer()
     }
@@ -303,13 +304,13 @@ final class MockInterview: ObservableObject {
         guard let start = reply.firstIndex(of: "["), let end = reply.lastIndex(of: "]"),
               let data = String(reply[start...end]).data(using: .utf8),
               let items = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
-            throw AppError("出题结果无法解析：\(reply.prefix(120))")
+            throw AppError(L("出题结果无法解析：%@", "\(reply.prefix(120))"))
         }
         let questions = items.compactMap { item -> (String, String)? in
             guard let q = (item["q"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), !q.isEmpty else { return nil }
-            return (q, item["kind"] as? String ?? "其他")
+            return (q, item["kind"] as? String ?? ["其他"][0])
         }
-        guard !questions.isEmpty else { throw AppError("没有出到题") }
+        guard !questions.isEmpty else { throw AppError(L("没有出到题")) }
         return Array(questions.prefix(config.questionCount))
     }
 
@@ -321,8 +322,8 @@ final class MockInterview: ObservableObject {
         1. 针对最后一次回答写点评，用中文，三到五句：先说答得好的地方，再说最主要的问题，最后给一条具体的改进办法。回答是空的就直说没有听到回答。
         2. \(canFollowUp ? "像真实面试官那样决定要不要追问：回答里有值得深挖的细节、含糊的地方或没说到的关键点就追问一句，用\(languageName)，一两句话；答得已经充分或者没有回答就不追问。" : "这道题不再追问，followup 留空。")
         只输出一个 JSON 对象：{"feedback": "点评", "followup": "追问的问题，不追问就是空字符串"}，不要输出其他内容。
-        """
-        let dialogue = thread.map { "面试官：\($0.question)\n候选人：\($0.answer.isEmpty ? "(没有回答)" : $0.answer)" }.joined(separator: "\n\n")
+        """ + L10n.shared.promptNote
+        let dialogue = thread.map { ["面试官：", $0.question, "\n候选人：", $0.answer.isEmpty ? "(没有回答)" : $0.answer].joined() }.joined(separator: "\n\n")
         do {
             let reply = try await llm.complete(system: system, user: background + "\n\n<dialogue>\n\(dialogue)\n</dialogue>", tier: .strong)
             var feedback = ""
@@ -339,7 +340,7 @@ final class MockInterview: ObservableObject {
             followUp = canFollowUp ? followUp.trimmingCharacters(in: .whitespacesAndNewlines) : ""
             return (feedback.trimmingCharacters(in: .whitespacesAndNewlines), followUp)
         } catch {
-            return ("点评生成失败：\(error)", "")
+            return (L("点评生成失败：%@", "\(error)"), "")
         }
     }
 
@@ -390,7 +391,7 @@ final class MockInterview: ObservableObject {
             return
         }
         guard await MicRecorder.requestPermission() else {
-            throw AppError("没有麦克风权限，请在 系统设置 › 隐私与安全性 › 麦克风 里允许面试助手")
+            throw AppError(L("没有麦克风权限，请在 系统设置 › 隐私与安全性 › 麦克风 里允许面试助手"))
         }
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         self.dir = dir
@@ -404,7 +405,7 @@ final class MockInterview: ObservableObject {
 
         let input = engine.inputNode
         let format = input.outputFormat(forBus: 0)
-        guard format.sampleRate > 0, format.channelCount > 0 else { throw AppError("没有可用的麦克风输入") }
+        guard format.sampleRate > 0, format.channelCount > 0 else { throw AppError(L("没有可用的麦克风输入")) }
         let recorder = try AudioFileRecorder(url: dir.appendingPathComponent("mic.m4a"), format: format)
         self.recorder = recorder
         input.installTap(onBus: 0, bufferSize: 4096, format: format) { buffer, _ in
@@ -466,7 +467,7 @@ final class MockInterview: ObservableObject {
 
     private func wrapUp() async {
         phase = .wrappingUp
-        status = "正在保存录音…"
+        status = L("正在保存录音…")
         let totalMs = nowMs
         await stopAudio()
         guard let id = sessionID, let dir, let store = Store.shared else {
@@ -485,18 +486,18 @@ final class MockInterview: ObservableObject {
         let answered = turns.filter { !$0.answer.isEmpty }.count
         Log.write("模拟面试结束：共 \(turns.count) 个回合，其中作答 \(answered) 个，时长 \(totalMs / 1000) 秒")
         guard answered > 0 else {
-            store.setTitle(session: id, title: "模拟面试(没有作答)")
-            status = "没有作答，不生成复盘"
+            store.setTitle(session: id, title: L("模拟面试(没有作答)"))
+            status = L("没有作答，不生成复盘")
             phase = .finished
             return
         }
-        status = "正在生成复盘(重新转写、翻译、评价和纪要)…"
+        status = L("正在生成复盘(重新转写、翻译、评价和纪要)…")
         await post.process(id)
         // 标题前面标明是模拟面试，和真实面试区分开
         let title = store.session(id)?.title ?? ""
-        store.setTitle(session: id, title: title.isEmpty ? "模拟面试" : "模拟 · " + title)
+        store.setTitle(session: id, title: title.isEmpty ? L("模拟面试") : L("模拟 · ") + title)
         reviewReady = store.jobs(session: id)[.analyze]?.status == "done"
-        status = reviewReady ? "复盘已生成" : "复盘没有全部完成，可以在历史与复盘里继续处理"
+        status = reviewReady ? L("复盘已生成") : L("复盘没有全部完成，可以在历史与复盘里继续处理")
         phase = .finished
     }
 }

@@ -12,26 +12,26 @@ enum Exporter {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd HH:mm"
         var out = "# \(session.displayTitle)\n\n"
-        out += "\(formatter.string(from: session.startedAt))，时长 \(session.durationSeconds / 60) 分 \(session.durationSeconds % 60) 秒，\(session.mode.title)\n\n"
+        out += L("%@，时长 %@ 分 %@ 秒，%@\n\n", "\(formatter.string(from: session.startedAt))", "\(session.durationSeconds / 60)", "\(session.durationSeconds % 60)", "\(session.mode.title)")
         if !summary.isEmpty { out += summary + "\n\n" }
 
         if !qa.isEmpty {
-            out += "## 问答复盘\n\n"
+            out += L("## 问答复盘\n\n")
             for item in qa {
-                let score = item.score > 0 ? "，评分 \(item.score)/5" : ""
+                let score = item.score > 0 ? L("，评分 %@/5", "\(item.score)") : ""
                 out += "### \(item.idx + 1). \(item.question)\n\n"
-                out += "\(item.kind.isEmpty ? "" : "\(item.kind)，")\(clock(item.askedMs))\(score)\n\n"
-                if !item.myAnswer.isEmpty { out += "**\(item.kind == "反问" ? "面试官的回答" : "我的回答")**\n\n\(item.myAnswer)\n\n" }
-                if !item.evaluation.isEmpty { out += "**评价**\n\n\(item.evaluation)\n\n" }
-                if !item.reference.isEmpty { out += "**参考答案**\n\n\(item.reference)\n\n" }
-                if !item.suggested.isEmpty { out += "**会中给出的建议答案**\n\n\(item.suggested.replacingOccurrences(of: "\n---", with: "\n"))\n\n" }
+                out += (item.kind.isEmpty ? "" : L(item.kind) + L("，")) + clock(item.askedMs) + score + "\n\n"
+                if !item.myAnswer.isEmpty { out += "**\(item.kind == "反问" ? L("面试官的回答") : L("我的回答"))**\n\n\(item.myAnswer)\n\n" }
+                if !item.evaluation.isEmpty { out += L("**评价**\n\n%@\n\n", "\(item.evaluation)") }
+                if !item.reference.isEmpty { out += L("**参考答案**\n\n%@\n\n", "\(item.reference)") }
+                if !item.suggested.isEmpty { out += L("**会中给出的建议答案**\n\n%@\n\n", "\(item.suggested.replacingOccurrences(of: "\n---", with: "\n"))") }
             }
         }
 
         if !utterances.isEmpty {
-            out += "## 完整记录\n\n"
+            out += L("## 完整记录\n\n")
             for utterance in utterances {
-                out += "**\(clock(utterance.startMs)) \(utterance.speaker)**：\(utterance.text)\n\n"
+                out += "**" + clock(utterance.startMs) + " " + Localized.speaker(utterance.speaker) + "**" + L("：") + utterance.text + "\n\n"
                 if !utterance.translation.isEmpty { out += "> \(utterance.translation)\n\n" }
             }
         }
@@ -73,7 +73,7 @@ enum Exporter {
         guard let data = html(fromMarkdown: markdown).data(using: .utf8),
               let text = NSAttributedString(html: data, options: [.characterEncoding: String.Encoding.utf8.rawValue],
                                             documentAttributes: nil) else {
-            throw AppError("生成 PDF 内容失败")
+            throw AppError(L("生成 PDF 内容失败"))
         }
         let info = NSPrintInfo()
         info.paperSize = NSSize(width: 595, height: 842)
@@ -91,6 +91,6 @@ enum Exporter {
         let operation = NSPrintOperation(view: view, printInfo: info)
         operation.showsPrintPanel = false
         operation.showsProgressPanel = false
-        guard operation.run() else { throw AppError("写入 PDF 失败") }
+        guard operation.run() else { throw AppError(L("写入 PDF 失败")) }
     }
 }

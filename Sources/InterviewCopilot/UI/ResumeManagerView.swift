@@ -13,14 +13,14 @@ struct ResumeManagerView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            PageHeader(title: "简历与热词", subtitle: "答案和题目都从这里来") {
-                Text(locked ? "听译进行中，结束后才能修改" : "生效的热词 \(totalCount) 个，上限 100 个")
+            PageHeader(title: L("简历与热词"), subtitle: L("答案和题目都从这里来")) {
+                Text(locked ? L("听译进行中，结束后才能修改") : L("生效的热词 %@ 个，上限 100 个", "\(totalCount)"))
                     .font(.system(size: 12))
                     .foregroundStyle(locked || totalCount >= 100 ? Theme.warn : Theme.muted)
             }
             ScrollView {
                 VStack(alignment: .leading, spacing: 26) {
-                    Text("英文面试优先用英文简历，中文面试优先用中文简历；只导入了一份时两种面试都用它。热词用来提高转写对专有名词的准确率，改动在下次开始听译时生效。")
+                    Text(L("英文面试优先用英文简历，中文面试优先用中文简历；只导入了一份时两种面试都用它。热词用来提高转写对专有名词的准确率，改动在下次开始听译时生效。"))
                         .font(.system(size: 13)).foregroundStyle(Theme.muted)
                         .lineSpacing(3)
                         .frame(maxWidth: 720, alignment: .leading)
@@ -34,17 +34,17 @@ struct ResumeManagerView: View {
                                     .foregroundStyle(resume.texts[slot] == nil ? Theme.muted : Theme.accent)
                                 Text(resume.summary(slot)).font(.system(size: 13)).foregroundStyle(Theme.ink).lineLimit(1)
                                 Spacer()
-                                Button(resume.texts[slot] == nil ? "导入…" : "更换…") { importResume(slot) }
+                                Button(resume.texts[slot] == nil ? L("导入…") : L("更换…")) { importResume(slot) }
                                     .buttonStyle(QuietButtonStyle())
-                                Button("清除") { resume.clear(slot) }
+                                Button(L("清除")) { resume.clear(slot) }
                                     .buttonStyle(QuietButtonStyle())
                                     .disabled(resume.texts[slot] == nil)
                             }
                             if resume.texts[slot] != nil {
                                 HStack {
-                                    Text("这份简历的热词").font(.system(size: 12)).foregroundStyle(Theme.muted)
+                                    Text(L("这份简历的热词")).font(.system(size: 12)).foregroundStyle(Theme.muted)
                                     Spacer()
-                                    Button(resume.analyzing.contains(slot) ? "正在抽取…" : "重新抽取") { extract(slot) }
+                                    Button(resume.analyzing.contains(slot) ? L("正在抽取…") : L("重新抽取")) { extract(slot) }
                                         .buttonStyle(LinkButtonStyle())
                                         .disabled(resume.analyzing.contains(slot))
                                 }
@@ -57,7 +57,7 @@ struct ResumeManagerView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 12) {
-                        SectionRule(title: "手动添加的热词")
+                        SectionRule(title: L("手动添加的热词"))
                         TermChips(terms: manualList, locked: locked) {
                             manualTerms = $0.joined(separator: ", ")
                         }
@@ -65,7 +65,7 @@ struct ResumeManagerView: View {
                     .disabled(locked)
 
                     VStack(alignment: .leading, spacing: 12) {
-                        SectionRule(title: "岗位描述，可以不填")
+                        SectionRule(title: L("岗位描述，可以不填"))
                         TextEditor(text: $resume.jd)
                             .font(.system(size: 13))
                             .scrollContentBackground(.hidden)
@@ -85,7 +85,7 @@ struct ResumeManagerView: View {
         panel.allowedContentTypes = [.pdf, .plainText, .rtf,
                                      .init(filenameExtension: "docx"), .init(filenameExtension: "doc"),
                                      .init(filenameExtension: "md")].compactMap { $0 }
-        panel.message = "选择\(slot.title)文件(PDF、Word 或纯文本)"
+        panel.message = L("选择%@文件(PDF、Word 或纯文本)", "\(slot.title)")
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
             try resume.load(from: url, slot: slot)
@@ -115,7 +115,7 @@ struct TermChips: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if terms.isEmpty {
-                Text("还没有热词").font(.system(size: 12)).foregroundStyle(Theme.muted)
+                Text(L("还没有热词")).font(.system(size: 12)).foregroundStyle(Theme.muted)
             } else {
                 FlowLayout(spacing: 6) {
                     ForEach(terms, id: \.self) { term in
@@ -128,7 +128,7 @@ struct TermChips: View {
                             }
                             .buttonStyle(.plain)
                             .foregroundStyle(.secondary)
-                            .help("删除这个热词")
+                            .help(L("删除这个热词"))
                         }
                         .padding(.horizontal, 9).padding(.vertical, 4)
                         .background(RoundedRectangle(cornerRadius: 6).fill(Theme.surface))
@@ -137,12 +137,12 @@ struct TermChips: View {
                 }
             }
             HStack {
-                TextField("添加热词，多个用逗号分隔", text: $input)
+                TextField(L("添加热词，多个用逗号分隔"), text: $input)
                     .textFieldStyle(.roundedBorder)
                     .onSubmit(add)
-                Button("添加", action: add).disabled(input.trimmingCharacters(in: .whitespaces).isEmpty)
+                Button(L("添加"), action: add).disabled(input.trimmingCharacters(in: .whitespaces).isEmpty)
                 if !terms.isEmpty {
-                    Button("全部删除") { onChange([]) }
+                    Button(L("全部删除")) { onChange([]) }
                 }
             }
             .controlSize(.small)

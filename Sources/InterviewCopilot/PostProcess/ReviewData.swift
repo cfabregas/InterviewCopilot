@@ -24,8 +24,8 @@ struct SessionInfo: Identifiable, Hashable {
     var displayTitle: String {
         if !title.isEmpty { return title }
         let formatter = DateFormatter()
-        formatter.dateFormat = "M 月 d 日 HH:mm"
-        return formatter.string(from: startedAt) + " 的面试"
+        formatter.dateFormat = L("M 月 d 日 HH:mm")
+        return L("%@ 的面试", formatter.string(from: startedAt))
     }
 }
 
@@ -60,10 +60,10 @@ enum PostTask: String, CaseIterable {
 
     var title: String {
         switch self {
-        case .transcribe: return "重新转写"
-        case .dedupe: return "回声去重"
-        case .translate: return "全文翻译"
-        case .analyze: return "问答与纪要"
+        case .transcribe: return L("重新转写")
+        case .dedupe: return L("回声去重")
+        case .translate: return L("全文翻译")
+        case .analyze: return L("问答与纪要")
         }
     }
 }
@@ -117,7 +117,7 @@ extension Store {
     /// 会中的实时句段，会后处理完成前先拿它顶上
     func realtimeUtterances(session: Int64) -> [Utterance] {
         query("SELECT * FROM segment WHERE session_id = ? ORDER BY start_ms, id", [session]).map { row in
-            Utterance(id: -(row["id"] as? Int64 ?? 0), channel: "system", speaker: "面试官",
+            Utterance(id: -(row["id"] as? Int64 ?? 0), channel: "system", speaker: ["面试官"][0],
                       startMs: int(row["start_ms"]), endMs: int(row["end_ms"]),
                       text: row["text_rt"] as? String ?? "", translation: row["translation_rt"] as? String ?? "")
         }

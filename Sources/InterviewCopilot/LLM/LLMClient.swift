@@ -9,8 +9,8 @@ enum LLMLine: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .qwen: return "国内：通义千问(用阿里云密钥)"
-        case .claude: return "海外：Claude"
+        case .qwen: return L("国内：通义千问(用阿里云密钥)")
+        case .claude: return L("海外：Claude")
         }
     }
 
@@ -44,7 +44,7 @@ enum LLMTier: String, CaseIterable {
     case fast
     case strong
 
-    var title: String { self == .fast ? "快档" : "强档" }
+    var title: String { self == .fast ? L("快档") : L("强档") }
 }
 
 /// 每条线路每个档位实际调用的模型名。可以在主窗口里改，留空就用默认值。
@@ -88,7 +88,7 @@ enum SSE {
     /// 发起流式请求，把每个 "data: ..." 事件的内容交给 onData。HTTP 出错时抛出带响应内容的错误。
     static func run(_ request: URLRequest, onData: (String) throws -> Void) async throws {
         let (bytes, response) = try await URLSession.shared.bytes(for: request)
-        guard let http = response as? HTTPURLResponse else { throw AppError("大模型接口没有返回 HTTP 响应") }
+        guard let http = response as? HTTPURLResponse else { throw AppError(L("大模型接口没有返回 HTTP 响应")) }
         guard http.statusCode == 200 else {
             var body = ""
             for try await line in bytes.lines {
@@ -109,5 +109,5 @@ enum SSE {
 struct LLMHTTPError: Error, CustomStringConvertible {
     let status: Int
     let body: String
-    var description: String { "大模型接口返回 HTTP \(status)：\(body.prefix(300))" }
+    var description: String { L("大模型接口返回 HTTP %@：%@", "\(status)", "\(body.prefix(300))") }
 }

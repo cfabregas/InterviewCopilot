@@ -41,8 +41,8 @@ enum LanguageMode: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .enToZh: return "英文 → 中文"
-        case .zhToEn: return "中文 → 英文"
+        case .enToZh: return L("英文 → 中文")
+        case .zhToEn: return L("中文 → 英文")
         }
     }
 
@@ -71,11 +71,11 @@ enum ASRLine: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .auto: return "自动(选最快的云端线路)"
-        case .local: return "本地(离线)"
-        case .deepgram: return "海外：Deepgram"
-        case .assemblyai: return "海外：AssemblyAI"
-        case .aliyun: return "国内：阿里云百炼"
+        case .auto: return L("自动(选最快的云端线路)")
+        case .local: return L("本地(离线)")
+        case .deepgram: return L("海外：Deepgram")
+        case .assemblyai: return L("海外：AssemblyAI")
+        case .aliyun: return L("国内：阿里云百炼")
         }
     }
 
