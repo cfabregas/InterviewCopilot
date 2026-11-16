@@ -439,13 +439,19 @@ final class MockInterview: ObservableObject {
     }
 
     private func handle(_ event: ASREvent) {
-        let text = event.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        var text = event.text.trimmingCharacters(in: .whitespacesAndNewlines)
         if event.kind == .final, CommandLine.arguments.contains("--mock-test") {
             Log.write("  [转写定稿 \(event.startMs)–\(event.endMs) ms，作答从 \(answerStartMs) ms 起，阶段 \(phase)] \(text)")
         }
         guard phase == .answering else { return }
-        // 朗读问题时麦克风也在收音：开始作答之前的内容不算
-        if event.endMs >= 0, event.endMs < answerStartMs { return }
+        // 朗读问题时麦克风也在收音(外放时)。问题最后一句的定稿常常在开始作答之后才到，所以按这句话的起止时间判断：
+        // 开始作答前就起头、作答后很快结束的，是问题的回声，不算；
+        // 开始作答前就起头、却一直延续到作答之后的，是回声和我的回答被连成了一句，按时间比例只留后半段。
+        if event.endMs >= 0, event.startMs < answerStartMs - 1000 {
+            guard event.endMs > answerStartMs + 1500, event.endMs > event.startMs else { return }
+            let keep = Double(event.endMs - answerStartMs) / Double(event.endMs - event.startMs)
+            text = String(text.suffix(Int(Double(text.count) * keep)))
+        }
         switch event.kind {
         case .partial:
             partial = text
