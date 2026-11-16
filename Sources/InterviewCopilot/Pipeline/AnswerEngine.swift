@@ -83,7 +83,7 @@ final class AnswerEngine: ObservableObject {
         if llm == nil {
             Log.write("实时答案未启用：还没有填写\(llmLine.title)的密钥")
         } else {
-            Log.write("实时答案：\(llmLine.title)，\(resume.describeChoice(for: mode))")
+            Log.write("实时答案：\(llmLine.title)，快档 \(LLMModels.name(llmLine, .fast))，强档 \(LLMModels.name(llmLine, .strong))，\(resume.describeChoice(for: mode))")
         }
     }
 

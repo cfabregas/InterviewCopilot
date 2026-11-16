@@ -13,6 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private let reviewModel = ReviewModel()
     private var reviewWindow: NSWindow?
     private var cardObserver: AnyCancellable?
+    private var runningObserver: AnyCancellable?
     private let settings = OverlaySettings()
     private let logStore = LogStore()
     private var overlay: OverlayPanel!
@@ -24,7 +25,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         overlay = OverlayPanel(content: SubtitleOverlayView(controller: controller, settings: settings, answers: answers))
         settings.panel = overlay
         overlay.ignoresMouseEvents = settings.clickThrough   // 默认鼠标穿透，⌃⌥T 切换
-        overlay.orderFrontRegardless()
 
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 760, height: 680),
                           styleMask: [.titled, .closable, .miniaturizable, .resizable],
@@ -53,6 +53,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         HotKeys.shared.register(keyCode: kVK_ANSI_X, modifiers: controlKey | optionKey) { [weak self] in
             self?.answers.dismissCard()
         }
+        // 结束面试：和主窗口的"结束"按钮一样。主窗口最小化时不用先把它找回来。
+        HotKeys.shared.register(keyCode: kVK_ANSI_E, modifiers: controlKey | optionKey) { [weak self] in
+            guard let self, self.controller.isRunning else { return }
+            Task { await self.controller.stop() }
+        }
+        // 开始后才显示悬浮窗并把主窗口收进程序坞；结束(不管从哪里结束)就收起悬浮窗、把主窗口拿回来
+        runningObserver = controller.$isRunning.removeDuplicates().dropFirst().sink { [weak self] running in
+            guard let self else { return }
+            self.settings.sessionActive = running
+            if running {
+                self.window.miniaturize(nil)
+            } else {
+                self.window.deminiaturize(nil)
+                self.window.makeKeyAndOrderFront(nil)
+                NSApp.activate(ignoringOtherApps: true)
+            }
+            Log.write("窗口切换：面试\(running ? "开始" : "结束")，悬浮窗\(self.overlay.isVisible ? "显示" : "收起")，主窗口\(self.window.isMiniaturized ? "已最小化" : "显示")")
+        }
         // 答案卡出现时悬浮窗不够高就向下撑开(保持顶边不动)，否则答案会被裁掉
         cardObserver = answers.$card.map { $0 != nil }.removeDuplicates().sink { [weak self] showing in
             guard showing, let panel = self?.overlay, panel.frame.height < 460 else { return }
@@ -77,6 +95,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         if CommandLine.arguments.contains("--autotest") {
             Task { await runAutotest() }
+        }
+        // 自测：检测可用的通义千问模型，结果写进日志后退出
+        if CommandLine.arguments.contains("--probe-models") {
+            Task {
+                guard let key = KeyStore.get(LLMLine.qwen.keyAccount) else { NSApp.terminate(nil); return }
+                for result in await ModelProbe.run(apiKey: key) {
+                    Log.write("模型检测：\(result.model) 首字 \(result.firstTokenMs) 毫秒\(result.listed ? "" : "(不在模型列表里)")")
+                }
+                Log.write("=== 模型检测结束 ===")
+                try? await Task.sleep(nanoseconds: 300_000_000)
+                NSApp.terminate(nil)
+            }
         }
         if let dir = CommandLine.arguments.first(where: { $0.hasPrefix("--post-test=") })?.dropFirst(12) {
             Task { await runPostTest(URL(fileURLWithPath: String(dir))) }

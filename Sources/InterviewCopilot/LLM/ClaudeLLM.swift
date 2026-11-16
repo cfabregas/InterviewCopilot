@@ -28,7 +28,7 @@ struct ClaudeLLM: LLMClient {
     private func run(system: String, user: String, tier: LLMTier, withFallbacks: Bool,
                      _ continuation: AsyncThrowingStream<String, Error>.Continuation) async throws {
         var body: [String: Any] = [
-            "model": tier == .fast ? "claude-haiku-5-5" : "claude-sonnet-5-5",
+            "model": LLMModels.name(.claude, tier),
             "max_tokens": tier == .fast ? 2_000 : 8_000,
             "stream": true,
             // 系统提示(规则加简历)每次都一样，打开缓存：后续请求更快也更便宜

@@ -4,14 +4,15 @@ import Foundation
 /// 文档：https://help.aliyun.com/zh/model-studio/use-qwen-by-calling-api
 struct QwenLLM: LLMClient {
     let apiKey: String
+    /// 检测新模型时用：不管档位，固定调这个模型
+    var modelOverride: String?
 
     func stream(system: String, user: String, tier: LLMTier) -> AsyncThrowingStream<String, Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
                 do {
                     let body: [String: Any] = [
-                        // 3.8 这一代只有 Max 和 Flash 两档，没有 Plus
-                        "model": tier == .fast ? "qwen3.8-flash" : "qwen3.8-max",
+                        "model": modelOverride ?? LLMModels.name(.qwen, tier),
                         "stream": true,
                         // 实时场景要的是快：关掉深度思考
                         "enable_thinking": false,

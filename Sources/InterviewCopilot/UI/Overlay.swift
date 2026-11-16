@@ -18,9 +18,15 @@ final class OverlaySettings: ObservableObject {
         didSet { panel?.sharingType = hideFromSharing ? .none : .readOnly }
     }
     @Published var visible = true {
-        didSet {
-            if visible { panel?.orderFrontRegardless() } else { panel?.orderOut(nil) }
-        }
+        didSet { refresh() }
+    }
+    /// 只有面试进行中才显示悬浮窗；⌃⌥H 可以在进行中临时隐藏
+    var sessionActive = false {
+        didSet { refresh() }
+    }
+
+    private func refresh() {
+        if visible && sessionActive { panel?.orderFrontRegardless() } else { panel?.orderOut(nil) }
     }
 }
 

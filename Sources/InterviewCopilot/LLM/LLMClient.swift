@@ -40,9 +40,34 @@ enum LLMLine: String, CaseIterable, Identifiable {
 }
 
 /// 模型档位：快的用来做分类和抽取，强的用来写答案
-enum LLMTier {
+enum LLMTier: String, CaseIterable {
     case fast
     case strong
+
+    var title: String { self == .fast ? "快档" : "强档" }
+}
+
+/// 每条线路每个档位实际调用的模型名。可以在主窗口里改，留空就用默认值。
+enum LLMModels {
+    static func defaultName(_ line: LLMLine, _ tier: LLMTier) -> String {
+        switch (line, tier) {
+        case (.qwen, .fast): return "qwen3.8-flash"
+        case (.qwen, .strong): return "qwen3.8-max"
+        case (.claude, .fast): return "claude-haiku-5-5"
+        case (.claude, .strong): return "claude-sonnet-5-5"
+        }
+    }
+
+    static func key(_ line: LLMLine, _ tier: LLMTier) -> String { "model.\(line.rawValue).\(tier.rawValue)" }
+
+    static func name(_ line: LLMLine, _ tier: LLMTier) -> String {
+        let saved = (UserDefaults.standard.string(forKey: key(line, tier)) ?? "").trimmingCharacters(in: .whitespaces)
+        return saved.isEmpty ? defaultName(line, tier) : saved
+    }
+
+    static func set(_ name: String, _ line: LLMLine, _ tier: LLMTier) {
+        UserDefaults.standard.set(name == defaultName(line, tier) ? "" : name, forKey: key(line, tier))
+    }
 }
 
 protocol LLMClient {

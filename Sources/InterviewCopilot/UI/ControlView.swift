@@ -21,6 +21,11 @@ struct ControlView: View {
     @ObservedObject var resume: ResumeStore
     var openReview: () -> Void = {}
     /// 会话结束后是否自动做会后处理
+    @AppStorage(LLMModels.key(.qwen, .fast)) private var qwenFast = ""
+    @AppStorage(LLMModels.key(.qwen, .strong)) private var qwenStrong = ""
+    @AppStorage(LLMModels.key(.claude, .fast)) private var claudeFast = ""
+    @AppStorage(LLMModels.key(.claude, .strong)) private var claudeStrong = ""
+    @State private var showingModelCheck = false
     @AppStorage("autoPostProcess") private var autoPost = true
     @State private var llmKeyInput = ""
     @State private var llmKeySaved = false
@@ -132,6 +137,28 @@ struct ControlView: View {
             .onAppear { llmKeySaved = KeyStore.has(LLMLine.claude.keyAccount) }
 
             HStack {
+                Text("模型").foregroundStyle(.secondary)
+                Text("快档")
+                TextField(LLMModels.defaultName(answers.llmLine, .fast),
+                          text: answers.llmLine == .qwen ? $qwenFast : $claudeFast)
+                    .textFieldStyle(.roundedBorder).frame(width: 170)
+                Text("强档")
+                TextField(LLMModels.defaultName(answers.llmLine, .strong),
+                          text: answers.llmLine == .qwen ? $qwenStrong : $claudeStrong)
+                    .textFieldStyle(.roundedBorder).frame(width: 170)
+                if answers.llmLine == .qwen {
+                    Button("检测新模型…") { showingModelCheck = true }
+                }
+                Text("留空用默认").foregroundStyle(.secondary)
+            }
+            .font(.caption)
+            .disabled(controller.isRunning)
+            .onAppear { if CommandLine.arguments.contains("--show-model-check") { showingModelCheck = true } }
+            .sheet(isPresented: $showingModelCheck) {
+                ModelCheckView { showingModelCheck = false }
+            }
+
+            HStack {
                 Button("简历与热词…") { showingResumeManager = true }
                 Text(ResumeSlot.allCases.map { "\($0.title)\(resume.texts[$0] == nil ? "未导入" : "已导入")" }.joined(separator: "，")
                      + "，热词 \(termCount) 个")
@@ -189,7 +216,7 @@ struct ControlView: View {
             }
 
             HStack {
-                Text("快捷键：⌃⌥H 显示或隐藏悬浮窗，⌃⌥T 切换鼠标穿透。悬浮窗可直接拖动，拖边缘可调整大小。")
+                Text("悬浮窗在开始后出现，主窗口同时收进程序坞；结束后悬浮窗收起，主窗口回来。快捷键：⌃⌥E 结束，⌃⌥H 显示或隐藏悬浮窗，⌃⌥T 切换鼠标穿透。悬浮窗可直接拖动，拖边缘可调整大小。")
                     .font(.caption).foregroundStyle(.secondary)
                 Spacer()
                 Button("退出应用") { NSApp.terminate(nil) }
