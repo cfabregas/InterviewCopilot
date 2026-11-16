@@ -1,12 +1,11 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// 简历与热词管理：导入、更换、清除两份简历，查看和编辑每份简历带来的热词，以及手动添加的热词和岗位描述。
+/// 简历与热词页：导入、更换、清除两份简历，查看和编辑每份简历带来的热词，以及手动添加的热词和岗位描述。
 struct ResumeManagerView: View {
     @ObservedObject var resume: ResumeStore
     @ObservedObject var answers: AnswerEngine
     let locked: Bool          // 听译进行中不允许改
-    let close: () -> Void
     @AppStorage(Terms.defaultsKey) private var manualTerms = ""
 
     private var manualList: [String] { Terms.split(manualTerms) }
@@ -14,82 +13,71 @@ struct ResumeManagerView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text("简历与热词").font(.title3.weight(.semibold))
-                Spacer()
-                Button("完成", action: close).keyboardShortcut(.defaultAction)
+            PageHeader(title: "简历与热词", subtitle: "答案和题目都从这里来") {
+                Text(locked ? "听译进行中，结束后才能修改" : "生效的热词 \(totalCount) 个，上限 100 个")
+                    .font(.system(size: 12))
+                    .foregroundStyle(locked || totalCount >= 100 ? Theme.warn : Theme.muted)
             }
-            .padding(16)
-            Divider()
-
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 26) {
                     Text("英文面试优先用英文简历，中文面试优先用中文简历；只导入了一份时两种面试都用它。热词用来提高转写对专有名词的准确率，改动在下次开始听译时生效。")
-                        .font(.caption).foregroundStyle(.secondary)
+                        .font(.system(size: 13)).foregroundStyle(Theme.muted)
+                        .lineSpacing(3)
+                        .frame(maxWidth: 720, alignment: .leading)
                         .fixedSize(horizontal: false, vertical: true)
 
                     ForEach(ResumeSlot.allCases) { slot in
-                        GroupBox {
-                            VStack(alignment: .leading, spacing: 10) {
+                        VStack(alignment: .leading, spacing: 12) {
+                            SectionRule(title: slot.title)
+                            HStack(spacing: 10) {
+                                Image(systemName: resume.texts[slot] == nil ? "doc" : "doc.text.fill")
+                                    .foregroundStyle(resume.texts[slot] == nil ? Theme.muted : Theme.accent)
+                                Text(resume.summary(slot)).font(.system(size: 13)).foregroundStyle(Theme.ink).lineLimit(1)
+                                Spacer()
+                                Button(resume.texts[slot] == nil ? "导入…" : "更换…") { importResume(slot) }
+                                    .buttonStyle(QuietButtonStyle())
+                                Button("清除") { resume.clear(slot) }
+                                    .buttonStyle(QuietButtonStyle())
+                                    .disabled(resume.texts[slot] == nil)
+                            }
+                            if resume.texts[slot] != nil {
                                 HStack {
-                                    Text(resume.summary(slot)).foregroundStyle(.secondary).lineLimit(1)
+                                    Text("这份简历的热词").font(.system(size: 12)).foregroundStyle(Theme.muted)
                                     Spacer()
-                                    Button(resume.texts[slot] == nil ? "导入…" : "更换…") { importResume(slot) }
-                                    Button("清除") { resume.clear(slot) }
-                                        .disabled(resume.texts[slot] == nil)
+                                    Button(resume.analyzing.contains(slot) ? "正在抽取…" : "重新抽取") { extract(slot) }
+                                        .buttonStyle(LinkButtonStyle())
+                                        .disabled(resume.analyzing.contains(slot))
                                 }
-                                if resume.texts[slot] != nil {
-                                    HStack {
-                                        Text("这份简历的热词").font(.caption).foregroundStyle(.secondary)
-                                        Spacer()
-                                        Button(resume.analyzing.contains(slot) ? "正在抽取…" : "重新抽取") { extract(slot) }
-                                            .controlSize(.small)
-                                            .disabled(resume.analyzing.contains(slot))
-                                    }
-                                    TermChips(terms: resume.terms[slot] ?? [], locked: locked) {
-                                        resume.setTerms(slot, $0)
-                                    }
+                                TermChips(terms: resume.terms[slot] ?? [], locked: locked) {
+                                    resume.setTerms(slot, $0)
                                 }
                             }
-                            .padding(6)
-                        } label: {
-                            Text(slot.title).font(.headline)
                         }
                         .disabled(locked)
                     }
 
-                    GroupBox {
+                    VStack(alignment: .leading, spacing: 12) {
+                        SectionRule(title: "手动添加的热词")
                         TermChips(terms: manualList, locked: locked) {
                             manualTerms = $0.joined(separator: ", ")
                         }
-                        .padding(6)
-                    } label: {
-                        Text("手动添加的热词").font(.headline)
                     }
                     .disabled(locked)
 
-                    GroupBox {
+                    VStack(alignment: .leading, spacing: 12) {
+                        SectionRule(title: "岗位描述，可以不填")
                         TextEditor(text: $resume.jd)
-                            .font(.system(size: 12))
-                            .frame(height: 90)
-                            .padding(4)
-                    } label: {
-                        Text("岗位描述(JD，可选)").font(.headline)
+                            .font(.system(size: 13))
+                            .scrollContentBackground(.hidden)
+                            .frame(height: 120)
+                            .surface(radius: 8, padding: 8)
                     }
                 }
-                .padding(16)
+                .padding(.horizontal, 28)
+                .padding(.bottom, 28)
+                .frame(maxWidth: 860, alignment: .leading)
             }
-
-            Divider()
-            HStack {
-                Text("实际生效的热词共 \(totalCount) 个(去重后，上限 100 个)")
-                    .font(.caption).foregroundStyle(totalCount >= 100 ? .orange : .secondary)
-                Spacer()
-                if locked { Text("听译进行中，结束后才能修改").font(.caption).foregroundStyle(.orange) }
-            }
-            .padding(.horizontal, 16).padding(.vertical, 10)
         }
-        .frame(width: 640, height: 640)
     }
 
     private func importResume(_ slot: ResumeSlot) {
@@ -127,7 +115,7 @@ struct TermChips: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if terms.isEmpty {
-                Text("还没有热词").font(.caption).foregroundStyle(.tertiary)
+                Text("还没有热词").font(.system(size: 12)).foregroundStyle(Theme.muted)
             } else {
                 FlowLayout(spacing: 6) {
                     ForEach(terms, id: \.self) { term in
@@ -142,8 +130,9 @@ struct TermChips: View {
                             .foregroundStyle(.secondary)
                             .help("删除这个热词")
                         }
-                        .padding(.horizontal, 8).padding(.vertical, 3)
-                        .background(Capsule().fill(Color.accentColor.opacity(0.14)))
+                        .padding(.horizontal, 9).padding(.vertical, 4)
+                        .background(RoundedRectangle(cornerRadius: 6).fill(Theme.surface))
+                        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.line))
                     }
                 }
             }

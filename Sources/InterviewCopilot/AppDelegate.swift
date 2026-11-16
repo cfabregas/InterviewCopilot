@@ -11,10 +11,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private lazy var controller = SessionController(answers: answers)
     private lazy var post = PostProcessor(answers: answers)
     private let reviewModel = ReviewModel()
-    private var reviewWindow: NSWindow?
+    private let navigator = Navigator()
     private lazy var mock = MockInterview(answers: answers, resume: resume, post: post)
-    private var mockWindow: NSWindow?
-    private var settingsWindow: NSWindow?
     private let checkup = Checkup()
     private var cardObserver: AnyCancellable?
     private var runningObserver: AnyCancellable?
@@ -25,6 +23,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         Log.sink = { [weak self] line in self?.logStore.append(line) }
+        // 调试用：不改系统设置，直接看深色外观
+        if CommandLine.arguments.contains("--dark") { NSApp.appearance = NSAppearance(named: .darkAqua) }
 
         overlay = OverlayPanel(content: SubtitleOverlayView(controller: controller, settings: settings, answers: answers))
         settings.panel = overlay
@@ -32,15 +32,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         overlay.sharingType = settings.hideFromSharing ? .none : .readOnly
         checkup.sessionRunning = { [weak self] in self?.controller.isRunning ?? false }
 
-        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 760, height: 520),
-                          styleMask: [.titled, .closable, .miniaturizable, .resizable],
+        mock.realSessionRunning = { [weak self] in self?.controller.isRunning ?? false }
+        mock.asrLine = { [weak self] in self?.controller.line ?? .auto }
+        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1200, height: 760),
+                          styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
                           backing: .buffered, defer: false)
         window.title = "面试助手"
-        window.contentView = NSHostingView(rootView: ControlView(controller: controller, log: logStore,
-                                                                  answers: answers, resume: resume, checkup: checkup,
-                                                                  openReview: { [weak self] in self?.showReview() },
-                                                                  openMock: { [weak self] in self?.showMock() },
-                                                                  openSettings: { [weak self] tab in self?.showSettings(tab: tab) }))
+        // 侧栏一直铺到窗口顶端，标题栏只留三个按钮
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        window.isMovableByWindowBackground = true
+        window.minSize = NSSize(width: 1040, height: 680)
+        window.contentView = NSHostingView(rootView: MainView(navigator: navigator, controller: controller, settings: settings,
+                                                              log: logStore, answers: answers, resume: resume, checkup: checkup,
+                                                              post: post, reviewModel: reviewModel, mock: mock))
+        window.setFrameAutosaveName("MainWindow")
         window.center()
         window.isReleasedWhenClosed = false
         window.delegate = self
@@ -61,6 +67,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         runningObserver = controller.$isRunning.removeDuplicates().dropFirst().sink { [weak self] running in
             guard let self else { return }
             self.settings.sessionActive = running
+            self.navigator.runningSince = running ? Date() : nil
             if running {
                 self.window.miniaturize(nil)
             } else {
@@ -122,61 +129,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
 
-    /// 打开历史与复盘窗口
-    func showReview() {
-        if reviewWindow == nil {
-            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1180, height: 760),
-                                  styleMask: [.titled, .closable, .miniaturizable, .resizable],
-                                  backing: .buffered, defer: false)
-            window.title = "历史与复盘"
-            window.contentView = NSHostingView(rootView: ReviewView(model: reviewModel, post: post))
-            window.isReleasedWhenClosed = false
-            window.center()
-            reviewWindow = window
-        }
-        reviewModel.reload()
-        reviewWindow?.makeKeyAndOrderFront(nil)
+    private func show(_ page: Page) {
+        navigator.page = page
+        window.makeKeyAndOrderFront(nil)
     }
 
-    /// 打开设置窗口；tab 不为空时切到那一页
-    @objc func showSettings(tab: String? = nil) {
+    /// 切到复盘页
+    func showReview() {
+        reviewModel.reload()
+        show(.review)
+    }
+
+    /// 切到设置页；tab 不为空时切到那一栏
+    func showSettings(tab: String? = nil) {
         if let tab { UserDefaults.standard.set(tab, forKey: "settingsTab") }
-        if settingsWindow == nil {
-            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 640, height: 480),
-                                  styleMask: [.titled, .closable], backing: .buffered, defer: false)
-            window.title = "设置"
-            window.contentView = NSHostingView(rootView: SettingsView(controller: controller, settings: settings, answers: answers,
-                                                                      resume: resume, checkup: checkup))
-            window.isReleasedWhenClosed = false
-            window.center()
-            settingsWindow = window
-        }
         checkup.refresh()
-        settingsWindow?.makeKeyAndOrderFront(nil)
+        show(.settings)
         NSApp.activate(ignoringOtherApps: true)
     }
 
     @objc private func openSettingsFromMenu() { showSettings(tab: nil) }
 
-    /// 打开模拟面试窗口
-    func showMock() {
-        if mockWindow == nil {
-            mock.realSessionRunning = { [weak self] in self?.controller.isRunning ?? false }
-            mock.asrLine = { [weak self] in self?.controller.line ?? .auto }
-            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 720, height: 620),
-                                  styleMask: [.titled, .closable, .miniaturizable, .resizable],
-                                  backing: .buffered, defer: false)
-            window.title = "模拟面试"
-            window.contentView = NSHostingView(rootView: MockInterviewView(mock: mock, resume: resume) { [weak self] id in
-                self?.reviewModel.selectedID = id
-                self?.showReview()
-            })
-            window.isReleasedWhenClosed = false
-            window.center()
-            mockWindow = window
-        }
-        mockWindow?.makeKeyAndOrderFront(nil)
-    }
+    /// 切到模拟面试页
+    func showMock() { show(.mock) }
 
     private func runMockTest() async {
         showMock()

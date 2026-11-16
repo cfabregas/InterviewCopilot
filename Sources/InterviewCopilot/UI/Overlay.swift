@@ -76,43 +76,50 @@ final class OverlayPanel: NSPanel {
     override var canBecomeMain: Bool { false }
 }
 
-/// 答案卡：问题、中文要点、可以照着说的回答
+/// 答案卡：像一张提词卡。左边一条提词黄的竖线，先是问题，再是中文要点，最后是可以照着说的回答
 struct AnswerCardView: View {
     let card: AnswerCard
     let fontSize: Double
 
+    private let cue = Color(red: 0.95, green: 0.74, blue: 0.33)
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("问：" + card.question)
-                .font(.system(size: fontSize * 0.6))
-                .foregroundStyle(.white.opacity(0.55))
-                .lineLimit(2)
-            if card.text.isEmpty, card.error == nil {
-                Text("正在生成答案…")
-                    .font(.system(size: fontSize * 0.75))
-                    .foregroundStyle(.white.opacity(0.6))
-            }
-            if !card.points.isEmpty {
-                Text(card.points)
-                    .font(.system(size: fontSize * 0.85, weight: .semibold))
-                    .foregroundStyle(Color(red: 1, green: 0.86, blue: 0.45))
-            }
-            if !card.script.isEmpty {
-                Text(card.script)
-                    .font(.system(size: fontSize * 0.75))
-                    .foregroundStyle(.white.opacity(0.92))
-            }
-            if let error = card.error {
-                Text("答案生成失败：" + error)
+        HStack(alignment: .top, spacing: 12) {
+            RoundedRectangle(cornerRadius: 1.5).fill(cue).frame(width: 3)
+            VStack(alignment: .leading, spacing: 7) {
+                Text(card.question)
                     .font(.system(size: fontSize * 0.6))
-                    .foregroundStyle(.red.opacity(0.9))
-                    .lineLimit(3)
+                    .foregroundStyle(.white.opacity(0.55))
+                    .lineLimit(2)
+                if card.text.isEmpty, card.error == nil {
+                    Text("正在准备回答…")
+                        .font(.system(size: fontSize * 0.75))
+                        .foregroundStyle(.white.opacity(0.6))
+                }
+                if !card.points.isEmpty {
+                    Text(card.points)
+                        .font(.system(size: fontSize * 0.85, weight: .semibold))
+                        .foregroundStyle(cue)
+                        .lineSpacing(3)
+                }
+                if !card.script.isEmpty {
+                    Text(card.script)
+                        .font(.system(size: fontSize * 0.75))
+                        .foregroundStyle(.white.opacity(0.92))
+                        .lineSpacing(3)
+                }
+                if let error = card.error {
+                    Text("答案生成失败：" + error)
+                        .font(.system(size: fontSize * 0.6))
+                        .foregroundStyle(Color(red: 1, green: 0.5, blue: 0.45))
+                        .lineLimit(3)
+                }
             }
         }
         .fixedSize(horizontal: false, vertical: true)
-        .padding(10)
+        .padding(.vertical, 10).padding(.horizontal, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 8).fill(.white.opacity(0.08)))
+        .background(RoundedRectangle(cornerRadius: 10).fill(.white.opacity(0.07)))
     }
 }
 
@@ -131,23 +138,30 @@ struct SubtitleOverlayView: View {
     @ObservedObject var answers: AnswerEngine
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             if controller.lines.isEmpty {
-                Text(controller.isRunning ? "正在听…" : "未开始")
-                    .font(.system(size: settings.fontSize * 0.8))
-                    .foregroundStyle(.white.opacity(0.55))
+                HStack(spacing: 8) {
+                    TallyLamp(on: controller.isRunning, size: 8)
+                    Text(controller.isRunning ? "正在听…" : "未开始")
+                        .font(.system(size: settings.fontSize * 0.75))
+                        .foregroundStyle(.white.opacity(0.6))
+                }
             }
-            ForEach(controller.lines.suffix(settings.maxLines)) { line in
-                VStack(alignment: .leading, spacing: 2) {
+            let visible = Array(controller.lines.suffix(settings.maxLines))
+            ForEach(visible) { line in
+                // 越早的句子越淡，眼睛自然落在最新一句上
+                let latest = line.id == visible.last?.id
+                VStack(alignment: .leading, spacing: 3) {
                     if settings.showSource {
                         Text(line.source)
-                            .font(.system(size: settings.fontSize * 0.7))
-                            .foregroundStyle(.white.opacity(line.isFinal ? 0.75 : 0.5))
+                            .font(.system(size: settings.fontSize * 0.66))
+                            .foregroundStyle(.white.opacity(line.isFinal ? 0.62 : 0.45))
                     }
                     if !line.translation.isEmpty {
                         Text(line.translation)
-                            .font(.system(size: settings.fontSize, weight: .medium))
-                            .foregroundStyle(.white.opacity(line.translationIsProvisional ? 0.6 : 1))
+                            .font(.system(size: settings.fontSize, weight: latest ? .semibold : .regular))
+                            .foregroundStyle(.white.opacity(line.translationIsProvisional ? 0.6 : (latest ? 1 : 0.8)))
+                            .lineSpacing(2)
                     }
                 }
                 .fixedSize(horizontal: false, vertical: true)
@@ -156,9 +170,10 @@ struct SubtitleOverlayView: View {
                 AnswerCardView(card: card, fontSize: settings.fontSize)
             }
         }
-        .padding(14)
+        .padding(.horizontal, 18).padding(.vertical, 14)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-        .background(RoundedRectangle(cornerRadius: 12).fill(.black.opacity(settings.opacity)))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .background(RoundedRectangle(cornerRadius: 14).fill(Color(red: 0.06, green: 0.08, blue: 0.11).opacity(settings.opacity)))
+        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(.white.opacity(settings.opacity > 0.05 ? 0.1 : 0)))
+        .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 }

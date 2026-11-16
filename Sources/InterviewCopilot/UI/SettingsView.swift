@@ -2,7 +2,7 @@ import AVFoundation
 import SwiftUI
 import Translation
 
-/// 设置窗口：线路与密钥、悬浮窗、快捷键、权限自检
+/// 设置页：线路与密钥、悬浮窗、快捷键、权限自检
 struct SettingsView: View {
     @ObservedObject var controller: SessionController
     @ObservedObject var settings: OverlaySettings
@@ -11,19 +11,30 @@ struct SettingsView: View {
     @ObservedObject var checkup: Checkup
     @AppStorage("settingsTab") private var tab = "lines"
 
+    private let tabs = [("lines", "线路与密钥"), ("overlay", "悬浮窗"), ("hotkeys", "快捷键"), ("checkup", "权限自检")]
+
     var body: some View {
-        TabView(selection: $tab) {
-            LinesSettings(controller: controller, answers: answers)
-                .tabItem { Label("线路与密钥", systemImage: "network") }.tag("lines")
-            OverlaySettingsPane(controller: controller, settings: settings)
-                .tabItem { Label("悬浮窗", systemImage: "rectangle.on.rectangle") }.tag("overlay")
-            HotKeySettings()
-                .tabItem { Label("快捷键", systemImage: "keyboard") }.tag("hotkeys")
-            CheckupPane(checkup: checkup, resume: resume)
-                .tabItem { Label("权限自检", systemImage: "checkmark.shield") }.tag("checkup")
+        VStack(alignment: .leading, spacing: 0) {
+            PageHeader(title: "设置", subtitle: "线路、密钥、悬浮窗、快捷键和权限") {
+                Picker("", selection: $tab) {
+                    ForEach(tabs, id: \.0) { Text($0.1).tag($0.0) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(width: 380)
+            }
+            Group {
+                switch tab {
+                case "overlay": OverlaySettingsPane(controller: controller, settings: settings)
+                case "hotkeys": HotKeySettings()
+                case "checkup": CheckupPane(checkup: checkup, resume: resume)
+                default: LinesSettings(controller: controller, answers: answers)
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .padding(.horizontal, 8)
+            .frame(maxWidth: 820, alignment: .leading)
         }
-        .padding(16)
-        .frame(width: 640, height: 480)
     }
 }
 

@@ -12,158 +12,44 @@ final class LogStore: ObservableObject {
     }
 }
 
-/// 主窗口：开始和结束会话，以及简历、复盘、模拟面试、设置几个入口。线路、密钥、外观都在设置窗口里。
-struct ControlView: View {
+/// 听译页：一块深色的"台口"放开始按钮、提示灯、计时和字幕预览，下面是准备情况、快捷键和运行日志
+struct ListenPage: View {
+    @ObservedObject var navigator: Navigator
     @ObservedObject var controller: SessionController
     @ObservedObject var log: LogStore
     @ObservedObject var answers: AnswerEngine
     @ObservedObject var resume: ResumeStore
     @ObservedObject var checkup: Checkup
     @ObservedObject private var hotKeys = HotKeys.shared
-    var openReview: () -> Void = {}
-    var openMock: () -> Void = {}
-    var openSettings: (String?) -> Void = { _ in }
 
-    @State private var showingResumeManager = false
     /// 日志区域是否展开(记住上次的选择)
-    @AppStorage("showLog") private var showLog = true
+    @AppStorage("showLog") private var showLog = false
     @State private var downloadConfig: TranslationSession.Configuration?
     /// 热词表：提高专有名词的转写准确率，下次开始听译时生效
     @AppStorage(Terms.defaultsKey) private var terms = ""
+    @AppStorage(LLMModels.key(.qwen, .strong)) private var qwenStrong = ""
+    @AppStorage(LLMModels.key(.claude, .strong)) private var claudeStrong = ""
     /// 实际生效的热词数(手动的加两份简历的，去重后)
     private var termCount: Int {
         _ = terms; _ = resume.terms
         return Terms.load().count
     }
 
-    /// 收起日志时把窗口缩到刚好放下控件，展开时恢复高度；窗口顶边保持不动
-    private func resizeWindowForLog() {
-        DispatchQueue.main.async {
-            guard let window = NSApp.windows.first(where: { $0.title == "面试助手" }),
-                  let content = window.contentView else { return }
-            let target = showLog ? max(content.fittingSize.height, 520) : content.fittingSize.height
-            var frame = window.frame
-            let delta = target - window.contentLayoutRect.height
-            frame.origin.y -= delta
-            frame.size.height += delta
-            window.setFrame(frame, display: true, animate: true)
-        }
-    }
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Picker("听译方向", selection: $controller.mode) {
-                    ForEach(LanguageMode.allCases) { Text($0.title).tag($0) }
-                }
-                .frame(width: 240)
-                .disabled(controller.isRunning || controller.isBusy)
-
-                Button(controller.isRunning ? "结束" : "开始听译") {
-                    Task {
-                        if controller.isRunning { await controller.stop() } else { await controller.start() }
-                    }
-                }
-                .keyboardShortcut(.defaultAction)
-                .disabled(controller.isBusy)
-
-                Text(controller.status).foregroundStyle(.secondary)
-                Spacer()
-                Button("设置…") { openSettings(nil) }
+        VStack(alignment: .leading, spacing: 0) {
+            PageHeader(title: "听译", subtitle: "听对方说话，实时出字幕、译文和回答提示")
+            VStack(alignment: .leading, spacing: 22) {
+                stagePanel
+                readiness
+                shortcuts
             }
-
-            // 权限或密钥有问题时在这里提醒，点进去处理
-            if !checkup.problems.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
-                    ForEach(checkup.problems, id: \.self) { problem in
-                        Label(problem, systemImage: "exclamationmark.triangle.fill")
-                    }
-                    Button("去处理…") { openSettings("checkup") }
-                }
-                .font(.callout)
-                .foregroundStyle(.orange)
-                .padding(8)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(RoundedRectangle(cornerRadius: 6).fill(Color.orange.opacity(0.1)))
-            }
-
-            HStack {
-                Toggle("实时答案", isOn: $answers.enabled)
-                Text("\(hotKeys.display(.answer)) 回答上一句，\(hotKeys.display(.dismiss)) 关闭答案")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-
-            HStack {
-                Button("简历与热词…") { showingResumeManager = true }
-                Text(ResumeSlot.allCases.map { "\($0.title)\(resume.texts[$0] == nil ? "未导入" : "已导入")" }.joined(separator: "，")
-                     + "，热词 \(termCount) 个")
-                    .foregroundStyle(.secondary)
-            }
-            // 调试用：启动后直接打开管理界面，方便截图检查
-            .onAppear { if CommandLine.arguments.contains("--show-resume-manager") { showingResumeManager = true } }
-            .sheet(isPresented: $showingResumeManager) {
-                ResumeManagerView(resume: resume, answers: answers, locked: controller.isRunning) {
-                    showingResumeManager = false
-                }
-            }
-
-            HStack {
-                Button("历史与复盘…") { openReview() }
-                Button("模拟面试…") { openMock() }.disabled(controller.isRunning)
-            }
-
-            if controller.translationNeedsDownload {
-                HStack {
-                    Text("翻译语言包未安装，当前只能转写。")
-                    Button("下载翻译语言包") {
-                        downloadConfig = TranslationSession.Configuration(source: controller.mode.sourceLanguage,
-                                                                          target: controller.mode.targetLanguage)
-                    }
-                }
-            }
-
-            HStack {
-                Text("开始后悬浮窗出现，主窗口收进程序坞；结束后恢复。\(hotKeys.display(.end)) 结束，\(hotKeys.display(.toggleOverlay)) 显示或隐藏悬浮窗，\(hotKeys.display(.clickThrough)) 切换鼠标穿透。")
-                    .font(.caption).foregroundStyle(.secondary)
-                Spacer()
-                Button("退出应用") { NSApp.terminate(nil) }
-            }
-
-            HStack(spacing: 4) {
-                Button {
-                    showLog.toggle()
-                    resizeWindowForLog()
-                } label: {
-                    Label("日志", systemImage: showLog ? "chevron.down" : "chevron.right")
-                        .font(.caption)
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                .help(showLog ? "收起日志" : "展开日志")
-                Spacer()
-            }
-
-            if showLog {
-            ScrollViewReader { proxy in
-                ScrollView {
-                    Text(log.text)
-                        .font(.system(size: 11, design: .monospaced))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .textSelection(.enabled)
-                    Color.clear.frame(height: 1).id("end")
-                }
-                .onChange(of: log.text) { proxy.scrollTo("end") }
-            }
-            .frame(minHeight: 160)
-            .background(Color(nsColor: .textBackgroundColor))
-            }
+            .padding(.horizontal, 28)
+            Spacer(minLength: 12)
+            logDrawer
         }
-        .padding(16)
-        .frame(minWidth: 720, minHeight: showLog ? 440 : nil, alignment: .top)
-        // 上次是收起状态时，启动后也把窗口缩到合适的高度
         .onAppear {
             checkup.refresh()
-            if !showLog { resizeWindowForLog() }
+            if CommandLine.arguments.contains("--show-log") { showLog = true }
         }
         .translationTask(downloadConfig) { session in
             do {
@@ -174,5 +60,192 @@ struct ControlView: View {
                 Log.write("翻译语言包下载未完成：\(error)")
             }
         }
+    }
+
+    // MARK: 台口
+
+    private var stagePanel: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(spacing: 10) {
+                TallyLamp(on: controller.isRunning)
+                Text(controller.isRunning ? controller.status : (controller.isBusy ? controller.status : "待机"))
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Theme.onCurtain)
+                    .lineLimit(1)
+                Spacer()
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    Text(Self.timecode(navigator.runningSince.map { context.date.timeIntervalSince($0) } ?? 0))
+                        .font(.system(size: 22, weight: .light).monospacedDigit())
+                        .foregroundStyle(controller.isRunning ? Theme.onCurtain : Theme.onCurtainMuted)
+                }
+            }
+
+            // 字幕预览：和悬浮窗里显示的是同一份内容
+            VStack(alignment: .leading, spacing: 8) {
+                if controller.lines.isEmpty {
+                    Text(controller.isRunning ? "正在听…" : "开始后，对方说的话会出现在这里和悬浮窗里。")
+                        .font(Theme.script(19))
+                        .foregroundStyle(Theme.onCurtainMuted)
+                } else {
+                    ForEach(controller.lines.suffix(2)) { line in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(line.source).font(.system(size: 12)).foregroundStyle(Theme.onCurtainMuted).lineLimit(1)
+                            if !line.translation.isEmpty {
+                                Text(line.translation).font(Theme.script(19)).foregroundStyle(Theme.onCurtain).lineLimit(2)
+                            }
+                        }
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, minHeight: 84, alignment: .bottomLeading)
+
+            Rectangle().fill(Color.white.opacity(0.1)).frame(height: 1)
+
+            HStack(spacing: 16) {
+                Picker("", selection: $controller.mode) {
+                    ForEach(LanguageMode.allCases) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(width: 230)
+                .disabled(controller.isRunning || controller.isBusy)
+
+                Toggle("实时答案", isOn: $answers.enabled)
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                    .foregroundStyle(Theme.onCurtain)
+
+                Spacer()
+
+                Button(controller.isRunning ? "结束" : "开始听译") {
+                    Task {
+                        if controller.isRunning { await controller.stop() } else { await controller.start() }
+                    }
+                }
+                .buttonStyle(PrimaryButtonStyle(live: controller.isRunning, large: true))
+                .keyboardShortcut(.defaultAction)
+                .disabled(controller.isBusy)
+            }
+            .colorScheme(.dark)
+            .tint(Theme.accentFill)
+        }
+        .stage(padding: 22)
+    }
+
+    static func timecode(_ interval: TimeInterval) -> String {
+        let seconds = max(Int(interval), 0)
+        return String(format: "%02d:%02d:%02d", seconds / 3600, seconds / 60 % 60, seconds % 60)
+    }
+
+    // MARK: 准备情况
+
+    private var readiness: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            SectionRule(title: "准备情况").padding(.bottom, 4)
+            row("转写线路", controller.line.title, good: true) {
+                Button("更改") { open("lines") }.buttonStyle(LinkButtonStyle())
+            }
+            row("大模型", "\(answers.llmLine == .qwen ? "通义千问" : "Claude")，写答案用 \(LLMModels.name(answers.llmLine, .strong))",
+                good: KeyStore.has(answers.llmLine.keyAccount)) {
+                Button("更改") { open("lines") }.buttonStyle(LinkButtonStyle())
+            }
+            row("简历", ResumeSlot.allCases.map { "\($0.title)\(resume.texts[$0] == nil ? "未导入" : "已导入")" }.joined(separator: "，")
+                + "，热词 \(termCount) 个", good: !resume.texts.isEmpty) {
+                Button("管理") { navigator.page = .resume }.buttonStyle(LinkButtonStyle())
+            }
+            ForEach(checkup.problems, id: \.self) { problem in
+                row("需要处理", problem, good: false) {
+                    Button("去处理") { open("checkup") }.buttonStyle(LinkButtonStyle())
+                }
+            }
+            if controller.translationNeedsDownload {
+                row("翻译语言包", "还没有安装，现在只能转写", good: false) {
+                    Button("下载") {
+                        downloadConfig = TranslationSession.Configuration(source: controller.mode.sourceLanguage,
+                                                                          target: controller.mode.targetLanguage)
+                    }
+                    .buttonStyle(LinkButtonStyle())
+                }
+            }
+        }
+    }
+
+    private func open(_ tab: String) {
+        UserDefaults.standard.set(tab, forKey: "settingsTab")
+        checkup.refresh()
+        navigator.page = .settings
+    }
+
+    private func row(_ title: String, _ value: String, good: Bool, @ViewBuilder action: () -> some View) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                Circle().fill(good ? Theme.good : Theme.warn).frame(width: 7, height: 7)
+                Text(title).font(.system(size: 13)).foregroundStyle(Theme.muted).frame(width: 76, alignment: .leading)
+                Text(value).font(.system(size: 13)).foregroundStyle(Theme.ink).lineLimit(1)
+                Spacer()
+                action()
+            }
+            .padding(.vertical, 9)
+            Rectangle().fill(Theme.line.opacity(0.6)).frame(height: 1)
+        }
+    }
+
+    // MARK: 快捷键
+
+    private var shortcuts: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SectionRule(title: "面试中用得到的快捷键")
+            FlowLayout(spacing: 18) {
+                ForEach(HotKeyAction.allCases) { action in
+                    HStack(spacing: 6) {
+                        KeyCap(text: hotKeys.display(action))
+                        Text(action.title).font(.system(size: 12)).foregroundStyle(Theme.muted)
+                    }
+                }
+            }
+            Text("开始后悬浮窗出现，这个窗口收进程序坞；结束后恢复。")
+                .font(.system(size: 12)).foregroundStyle(Theme.muted)
+        }
+    }
+
+    // MARK: 运行日志
+
+    private var logDrawer: some View {
+        VStack(spacing: 0) {
+            Rectangle().fill(Theme.line).frame(height: 1)
+            Button {
+                withAnimation(.easeOut(duration: 0.18)) { showLog.toggle() }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "chevron.right").rotationEffect(.degrees(showLog ? 90 : 0)).font(.system(size: 10, weight: .semibold))
+                    Text("运行日志").font(.system(size: 12, weight: .medium))
+                    Spacer()
+                }
+                .foregroundStyle(Theme.muted)
+                .padding(.horizontal, 28)
+                .padding(.vertical, 9)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(showLog ? "收起日志" : "展开日志")
+
+            if showLog {
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        Text(log.text)
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundStyle(Theme.ink.opacity(0.85))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .textSelection(.enabled)
+                            .padding(.horizontal, 28)
+                        Color.clear.frame(height: 8).id("end")
+                    }
+                    .onChange(of: log.text) { proxy.scrollTo("end") }
+                    .onAppear { proxy.scrollTo("end") }
+                }
+                .frame(height: 190)
+            }
+        }
+        .background(Theme.surface.opacity(0.6))
     }
 }

@@ -122,47 +122,78 @@ final class ReviewModel: ObservableObject {
     }
 }
 
-/// 历史与复盘窗口：左边是历史面试，右边是选中那场的时间轴、纪要和问答
+/// 复盘页：左边是历史面试，右边是选中那场的时间轴、纪要和问答
 struct ReviewView: View {
     @ObservedObject var model: ReviewModel
     @ObservedObject var post: PostProcessor
 
     var body: some View {
-        NavigationSplitView {
-            VStack(spacing: 0) {
-                TextField("搜索全部面试", text: $model.search)
-                    .textFieldStyle(.roundedBorder)
-                    .padding(8)
-                List(model.visibleSessions, selection: $model.selectedID) { session in
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(session.displayTitle).lineLimit(1)
-                        Text(Self.subtitle(session)).font(.caption).foregroundStyle(.secondary)
+        HStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 0) {
+                Text("复盘").font(Theme.display(26)).foregroundStyle(Theme.ink)
+                    .padding(.horizontal, 18).padding(.top, 22).padding(.bottom, 12)
+                HStack(spacing: 6) {
+                    Image(systemName: "magnifyingglass").foregroundStyle(Theme.muted)
+                    TextField("搜索全部面试", text: $model.search).textFieldStyle(.plain)
+                }
+                .font(.system(size: 13))
+                .surface(radius: 7, padding: 7)
+                .padding(.horizontal, 14)
+                .padding(.bottom, 8)
+
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 1) {
+                        ForEach(model.visibleSessions) { session in
+                            let selected = model.selectedID == session.id
+                            Button {
+                                model.selectedID = session.id
+                            } label: {
+                                HStack(spacing: 0) {
+                                    Rectangle().fill(selected ? Theme.accent : .clear).frame(width: 3)
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(session.displayTitle)
+                                            .font(.system(size: 13, weight: selected ? .semibold : .regular))
+                                            .foregroundStyle(Theme.ink).lineLimit(1)
+                                        Text(Self.subtitle(session)).font(.system(size: 11).monospacedDigit())
+                                            .foregroundStyle(Theme.muted).lineLimit(1)
+                                    }
+                                    .padding(.horizontal, 12).padding(.vertical, 8)
+                                    Spacer(minLength: 0)
+                                }
+                                .background(selected ? Theme.accent.opacity(0.09) : .clear)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        }
                     }
-                    .tag(session.id)
                 }
                 if model.visibleSessions.isEmpty {
-                    Text(model.sessions.isEmpty ? "还没有面试记录" : "没有找到").foregroundStyle(.secondary).padding()
+                    Text(model.sessions.isEmpty ? "还没有面试记录。完成一场听译或模拟面试后会出现在这里。" : "没有找到匹配的面试。")
+                        .font(.system(size: 13)).foregroundStyle(Theme.muted).padding(18)
+                    Spacer()
                 }
             }
-            .navigationSplitViewColumnWidth(min: 220, ideal: 250, max: 320)
-        } detail: {
+            .frame(width: 264)
+            .background(Theme.surface.opacity(0.55))
+            Rectangle().fill(Theme.line).frame(width: 1)
+
             if let session = model.selected {
                 SessionDetailView(model: model, post: post, player: model.player, session: session)
                     .id(session.id)
             } else {
-                Text("选择左边的一场面试").foregroundStyle(.secondary)
+                Text("选择左边的一场面试").font(.system(size: 13)).foregroundStyle(Theme.muted)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .onAppear { model.reload() }
         .onChange(of: post.revision) { model.reload() }
-        .frame(minWidth: 1000, minHeight: 640)
     }
 
     static func subtitle(_ session: SessionInfo) -> String {
         let formatter = DateFormatter()
-        formatter.dateFormat = "M-d HH:mm"
+        formatter.dateFormat = "M 月 d 日 HH:mm"
         let seconds = session.durationSeconds
-        return "\(formatter.string(from: session.startedAt)) · \(seconds / 60) 分 \(seconds % 60) 秒 · \(session.segmentCount) 句"
+        return "\(formatter.string(from: session.startedAt))，\(seconds / 60) 分 \(seconds % 60) 秒"
     }
 }
 
@@ -183,74 +214,32 @@ private struct SessionDetailView: View {
     private var allDone: Bool { PostTask.allCases.allSatisfy { ["done", "skipped"].contains(model.jobs[$0]?.status ?? "") } }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                TextField(session.displayTitle, text: $title)
-                    .textFieldStyle(.plain)
-                    .font(.title2.weight(.semibold))
-                    .onSubmit {
-                        Store.shared?.setTitle(session: session.id, title: title.trimmingCharacters(in: .whitespaces))
-                        model.reload()
-                    }
-                Spacer()
-                Button(allDone ? "重新处理" : (model.jobs.isEmpty ? "开始处理" : "继续处理")) {
-                    Task { await post.process(session.id, force: allDone) }
-                }
-                .disabled(post.running != nil)
-                Menu("导出") {
-                    Button("Markdown…") { export(pdf: false) }
-                    Button("PDF…") { export(pdf: true) }
-                }
-                .frame(width: 80)
-                Button("删除", role: .destructive) { confirmingDelete = true }
-                    .disabled(isProcessing)
-            }
-
-            HStack(spacing: 10) {
-                Text(ReviewView.subtitle(session) + " · " + session.mode.title).font(.caption).foregroundStyle(.secondary)
-                if isProcessing {
-                    ProgressView().controlSize(.small)
-                    Text("正在处理：\(post.stage)").font(.caption)
-                } else {
-                    ForEach(PostTask.allCases, id: \.self) { task in
-                        let state = model.jobs[task]
-                        Label(task.title, systemImage: Self.icon(state?.status))
-                            .font(.caption)
-                            .foregroundStyle(Self.color(state?.status))
-                            .help(state?.detail ?? "还没有处理")
-                    }
-                }
-                Spacer()
-            }
-            if !model.processed, !isProcessing {
-                Text("下面显示的是会中的实时记录。点\"开始处理\"后会重新转写、区分说话人、翻译全文，并生成问答评价和纪要。")
-                    .font(.caption).foregroundStyle(.orange)
-            }
-            if let failed = PostTask.allCases.first(where: { model.jobs[$0]?.status == "failed" }), !isProcessing {
-                Text("\(failed.title)失败：\(model.jobs[failed]?.detail ?? "")").font(.caption).foregroundStyle(.red).lineLimit(2)
-            }
-
-            Divider()
-
+        VStack(alignment: .leading, spacing: 0) {
+            header
+            Rectangle().fill(Theme.line).frame(height: 1)
             HSplitView {
-                timeline.frame(minWidth: 380, idealWidth: 460)
-                VStack(alignment: .leading, spacing: 8) {
+                timeline
+                    .padding(.horizontal, 20).padding(.vertical, 14)
+                    .frame(minWidth: 300, idealWidth: 380, maxHeight: .infinity)
+                    .background(Theme.paper)
+                VStack(alignment: .leading, spacing: 10) {
                     Picker("", selection: $tab) {
                         Text("纪要").tag(0)
-                        Text("问答(\(model.qa.count))").tag(1)
+                        Text("问答 \(model.qa.count)").tag(1)
                     }
                     .pickerStyle(.segmented)
                     .labelsHidden()
-                    .frame(width: 220)
+                    .frame(width: 200)
                     ScrollView {
                         if tab == 0 { summaryView } else { qaView }
                     }
                 }
-                .padding(.leading, 12)
-                .frame(minWidth: 380, idealWidth: 520)
+                .padding(.horizontal, 22).padding(.vertical, 14)
+                .frame(minWidth: 320, maxWidth: .infinity, maxHeight: .infinity)
+                .background(Theme.surface)
             }
+            .frame(maxWidth: .infinity)
         }
-        .padding(16)
         .onAppear { title = session.title }
         .confirmationDialog("删除这场面试的全部记录和录音？删除后无法恢复。", isPresented: $confirmingDelete) {
             Button("删除", role: .destructive) { model.delete(session) }
@@ -272,47 +261,131 @@ private struct SessionDetailView: View {
         }
     }
 
+    // MARK: 顶部：标题、动作、处理进度
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                TextField(session.displayTitle, text: $title)
+                    .textFieldStyle(.plain)
+                    .font(Theme.display(22))
+                    .foregroundStyle(Theme.ink)
+                    .onSubmit {
+                        Store.shared?.setTitle(session: session.id, title: title.trimmingCharacters(in: .whitespaces))
+                        model.reload()
+                    }
+                    .help("点击可以修改标题，回车保存")
+                Spacer()
+                Button(allDone ? "重新处理" : (model.jobs.isEmpty ? "开始处理" : "继续处理")) {
+                    Task { await post.process(session.id, force: allDone) }
+                }
+                .buttonStyle(allDone ? AnyButtonStyle(QuietButtonStyle()) : AnyButtonStyle(PrimaryButtonStyle()))
+                .disabled(post.running != nil)
+                Menu("导出") {
+                    Button("Markdown…") { export(pdf: false) }
+                    Button("PDF…") { export(pdf: true) }
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+                .padding(.horizontal, 10).padding(.vertical, 5)
+                .background(RoundedRectangle(cornerRadius: 7).fill(Theme.surface))
+                .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(Theme.line))
+                Button("删除") { confirmingDelete = true }
+                    .buttonStyle(QuietButtonStyle())
+                    .disabled(isProcessing)
+            }
+
+            HStack(spacing: 14) {
+                Text(ReviewView.subtitle(session) + "，" + session.mode.title)
+                    .font(.system(size: 12).monospacedDigit()).foregroundStyle(Theme.muted).fixedSize()
+                if isProcessing {
+                    ProgressView().controlSize(.small)
+                    Text("正在处理：\(post.stage)").font(.system(size: 12)).foregroundStyle(Theme.ink)
+                } else {
+                    // 四个步骤连成一条线：做完的是实心点
+                    HStack(spacing: 0) {
+                        ForEach(Array(PostTask.allCases.enumerated()), id: \.offset) { index, task in
+                            let state = model.jobs[task]
+                            if index > 0 { Rectangle().fill(Theme.line).frame(width: 18, height: 1).padding(.horizontal, 6) }
+                            HStack(spacing: 5) {
+                                Circle()
+                                    .fill(state?.status == "done" ? Theme.good : (state?.status == "failed" ? Theme.live : .clear))
+                                    .overlay(Circle().strokeBorder(Self.color(state?.status)))
+                                    .frame(width: 8, height: 8)
+                                Text(task.title).font(.system(size: 12)).foregroundStyle(state == nil ? Theme.muted : Theme.ink)
+                                    .fixedSize()
+                            }
+                            .help(state?.detail ?? "还没有处理")
+                        }
+                    }
+                }
+                Spacer()
+            }
+            if !model.processed, !isProcessing {
+                Text("下面是面试当时的实时记录。点\"开始处理\"会重新转写、区分说话人、翻译全文，并生成问答评价和纪要。")
+                    .font(.system(size: 12)).foregroundStyle(Theme.warn)
+            }
+            if let failed = PostTask.allCases.first(where: { model.jobs[$0]?.status == "failed" }), !isProcessing {
+                Text("\(failed.title)失败：\(model.jobs[failed]?.detail ?? "")").font(.system(size: 12)).foregroundStyle(Theme.live).lineLimit(2)
+            }
+        }
+        .padding(.horizontal, 22)
+        .padding(.top, 22)
+        .padding(.bottom, 14)
+    }
+
     // MARK: 时间轴
 
     private var timeline: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
                 Button {
                     player.toggle()
                 } label: {
-                    Image(systemName: player.isPlaying ? "pause.fill" : "play.fill").frame(width: 16)
+                    Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.white)
+                        .frame(width: 28, height: 28)
+                        .background(Circle().fill(player.available ? Theme.accent : Theme.muted.opacity(0.4)))
                 }
+                .buttonStyle(.plain)
                 .disabled(!player.available)
-                Text("\(Exporter.clock(player.currentMs)) / \(Exporter.clock(player.durationMs))")
-                    .font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
                 Slider(value: Binding(get: { Double(player.currentMs) },
                                       set: { player.play(fromMs: Int($0)) }),
                        in: 0...Double(max(player.durationMs, 1)))
+                    .controlSize(.small)
                     .disabled(!player.available)
+                Text("\(Exporter.clock(player.currentMs)) / \(Exporter.clock(player.durationMs))")
+                    .font(.system(size: 11).monospacedDigit()).foregroundStyle(Theme.muted)
             }
             if !player.available {
-                Text("这场面试没有录音文件").font(.caption).foregroundStyle(.secondary)
+                Text("这场面试没有录音文件").font(.system(size: 12)).foregroundStyle(Theme.muted)
             }
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 4) {
+                LazyVStack(alignment: .leading, spacing: 2) {
                     ForEach(model.utterances) { utterance in
                         let current = player.currentMs >= utterance.startMs && player.currentMs < utterance.endMs
                             && (player.isPlaying || player.currentMs > 0)
-                        HStack(alignment: .top, spacing: 8) {
+                        HStack(alignment: .top, spacing: 10) {
                             Text(Exporter.clock(utterance.startMs))
-                                .font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(utterance.speaker).font(.caption.weight(.semibold))
+                                .font(.system(size: 11).monospacedDigit()).foregroundStyle(Theme.muted)
+                                .frame(width: 38, alignment: .leading)
+                                .padding(.top, 2)
+                            Rectangle().fill(color(for: utterance.speaker)).frame(width: 2)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(utterance.speaker).font(.system(size: 11, weight: .semibold))
                                     .foregroundStyle(color(for: utterance.speaker))
-                                Text(utterance.text).textSelection(.enabled)
+                                Text(utterance.text).font(.system(size: 13)).foregroundStyle(Theme.ink)
+                                    .lineSpacing(2).textSelection(.enabled)
                                 if !utterance.translation.isEmpty {
-                                    Text(utterance.translation).foregroundStyle(.secondary).textSelection(.enabled)
+                                    Text(utterance.translation).font(.system(size: 13)).foregroundStyle(Theme.muted)
+                                        .lineSpacing(2).textSelection(.enabled)
                                 }
                             }
                             Spacer(minLength: 0)
                         }
-                        .padding(6)
-                        .background(RoundedRectangle(cornerRadius: 6).fill(current ? Color.accentColor.opacity(0.14) : .clear))
+                        .padding(.vertical, 6).padding(.horizontal, 6)
+                        .background(RoundedRectangle(cornerRadius: 6).fill(current ? Theme.accent.opacity(0.1) : .clear))
                         .contentShape(Rectangle())
                         .onTapGesture(count: 2) { player.play(fromMs: utterance.startMs) }
                         .contextMenu {
@@ -326,19 +399,21 @@ private struct SessionDetailView: View {
                         }
                     }
                     if model.utterances.isEmpty {
-                        Text("这场面试没有转写内容").foregroundStyle(.secondary).padding()
+                        Text("这场面试没有转写内容").font(.system(size: 13)).foregroundStyle(Theme.muted).padding()
                     }
                 }
                 .padding(.trailing, 8)
             }
-            Text("双击一段发言从那里开始播放；右键可以改说话人的名字。").font(.caption2).foregroundStyle(.tertiary)
+            Text("双击一段发言从那里开始播放；右键可以改说话人的名字。").font(.system(size: 11)).foregroundStyle(Theme.muted)
         }
     }
 
+    /// 我用靛青；面试官按出现顺序用几种区分得开的颜色
     private func color(for speaker: String) -> Color {
-        if model.utterances.first(where: { $0.speaker == speaker })?.channel == "mic" { return .green }
+        if model.utterances.first(where: { $0.speaker == speaker })?.channel == "mic" { return Theme.accent }
         let others = Array(Set(model.utterances.filter { $0.channel != "mic" }.map(\.speaker))).sorted()
-        let palette: [Color] = [.blue, .orange, .purple, .pink, .teal]
+        let palette: [Color] = [Color(red: 0.72, green: 0.38, blue: 0.16), Color(red: 0.16, green: 0.52, blue: 0.5),
+                                Color(red: 0.56, green: 0.3, blue: 0.62), Color(red: 0.62, green: 0.5, blue: 0.1)]
         return palette[(others.firstIndex(of: speaker) ?? 0) % palette.count]
     }
 
@@ -347,7 +422,8 @@ private struct SessionDetailView: View {
     private var summaryView: some View {
         Group {
             if model.summary.isEmpty {
-                Text(isProcessing ? "纪要生成中…" : "还没有纪要。处理完成后会显示在这里。").foregroundStyle(.secondary)
+                Text(isProcessing ? "纪要生成中…" : "还没有纪要。处理完成后会显示在这里。")
+                    .font(.system(size: 13)).foregroundStyle(Theme.muted)
             } else {
                 MarkdownText(model.summary)
             }
@@ -357,55 +433,64 @@ private struct SessionDetailView: View {
     }
 
     private var qaView: some View {
-        LazyVStack(alignment: .leading, spacing: 12) {
+        LazyVStack(alignment: .leading, spacing: 0) {
             if model.qa.isEmpty {
-                Text("还没有问答。").foregroundStyle(.secondary)
+                Text("还没有问答。").font(.system(size: 13)).foregroundStyle(Theme.muted)
             }
             ForEach(model.qa) { item in
-                GroupBox {
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack(alignment: .top) {
-                            Text("\(item.idx + 1). \(item.question)").font(.headline).textSelection(.enabled)
-                            Spacer()
-                            Button(Exporter.clock(item.askedMs)) { player.play(fromMs: item.askedMs) }
-                                .controlSize(.small).disabled(!player.available).help("从提问的地方开始播放")
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        Text("\(item.idx + 1)").font(Theme.display(20)).foregroundStyle(Theme.muted)
+                        Text(item.question).font(Theme.display(16)).foregroundStyle(Theme.ink)
+                            .lineSpacing(3).textSelection(.enabled)
+                        Spacer(minLength: 8)
+                        Button(Exporter.clock(item.askedMs)) { player.play(fromMs: item.askedMs) }
+                            .buttonStyle(LinkButtonStyle()).disabled(!player.available).help("从提问的地方开始播放")
+                    }
+                    HStack(spacing: 10) {
+                        if !item.kind.isEmpty {
+                            Text(item.kind).font(.system(size: 11)).foregroundStyle(Theme.muted)
+                                .padding(.horizontal, 7).padding(.vertical, 2)
+                                .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Theme.line))
                         }
-                        HStack(spacing: 8) {
-                            if !item.kind.isEmpty {
-                                Text(item.kind).font(.caption).padding(.horizontal, 6).padding(.vertical, 1)
-                                    .background(Capsule().fill(Color.accentColor.opacity(0.14)))
+                        if item.score > 0 {
+                            HStack(spacing: 3) {
+                                ForEach(1...5, id: \.self) { step in
+                                    RoundedRectangle(cornerRadius: 1.5)
+                                        .fill(step <= item.score ? Theme.cue : Theme.line)
+                                        .frame(width: 14, height: 4)
+                                }
                             }
-                            if item.score > 0 {
-                                Text(String(repeating: "★", count: item.score) + String(repeating: "☆", count: 5 - item.score))
-                                    .font(.caption).foregroundStyle(.orange)
-                            }
-                        }
-                        if !item.myAnswer.isEmpty {
-                            section(item.kind == "反问" ? "面试官的回答" : "我的回答") {
-                                Text(item.myAnswer).textSelection(.enabled)
-                            }
-                        }
-                        if !item.evaluation.isEmpty { section("评价") { MarkdownText(item.evaluation) } }
-                        if !item.reference.isEmpty {
-                            DisclosureGroup("参考答案") { MarkdownText(item.reference).padding(.top, 4) }
-                        }
-                        if !item.suggested.isEmpty {
-                            DisclosureGroup("会中给出的建议答案") {
-                                MarkdownText(item.suggested.replacingOccurrences(of: "\n---", with: "\n")).padding(.top, 4)
-                            }
+                            Text("\(item.score) 分，满分 5 分").font(.system(size: 11)).foregroundStyle(Theme.muted)
                         }
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(6)
+                    if !item.myAnswer.isEmpty {
+                        section(item.kind == "反问" ? "面试官的回答" : "我的回答") {
+                            Text(item.myAnswer).font(.system(size: 13)).foregroundStyle(Theme.ink).lineSpacing(3).textSelection(.enabled)
+                        }
+                    }
+                    if !item.evaluation.isEmpty { section("评价") { MarkdownText(item.evaluation) } }
+                    if !item.reference.isEmpty {
+                        DisclosureGroup("参考答案") { MarkdownText(item.reference).padding(.top, 6) }
+                            .font(.system(size: 13, weight: .medium))
+                    }
+                    if !item.suggested.isEmpty {
+                        DisclosureGroup("面试当时给出的建议答案") {
+                            MarkdownText(item.suggested.replacingOccurrences(of: "\n---", with: "\n")).padding(.top, 6)
+                        }
+                        .font(.system(size: 13, weight: .medium))
+                    }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 16)
+                Rectangle().fill(Theme.line).frame(height: 1)
             }
         }
-        .padding(.vertical, 4)
     }
 
     private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(title).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title).font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.muted)
             content()
         }
     }
@@ -430,22 +515,20 @@ private struct SessionDetailView: View {
         }
     }
 
-    private static func icon(_ status: String?) -> String {
-        switch status {
-        case "done": return "checkmark.circle.fill"
-        case "skipped": return "minus.circle"
-        case "failed": return "xmark.circle.fill"
-        default: return "circle"
-        }
-    }
-
     private static func color(_ status: String?) -> Color {
         switch status {
-        case "done": return .green
-        case "failed": return .red
-        default: return .secondary
+        case "done": return Theme.good
+        case "failed": return Theme.live
+        default: return Theme.muted.opacity(0.6)
         }
     }
+}
+
+/// 让两种按钮样式可以按条件二选一
+struct AnyButtonStyle: ButtonStyle {
+    private let make: (Configuration) -> AnyView
+    init<S: ButtonStyle>(_ style: S) { make = { AnyView(style.makeBody(configuration: $0)) } }
+    func makeBody(configuration: Configuration) -> some View { make(configuration) }
 }
 
 /// 简单的 Markdown 显示：标题、列表、加粗
@@ -454,18 +537,19 @@ struct MarkdownText: View {
     init(_ text: String) { self.text = text }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
+        VStack(alignment: .leading, spacing: 6) {
             ForEach(Array(text.components(separatedBy: "\n").enumerated()), id: \.offset) { _, raw in
                 let line = raw.trimmingCharacters(in: .whitespaces)
                 if line.hasPrefix("## ") || line.hasPrefix("# ") || line.hasPrefix("### ") {
-                    Text(inline(String(line.drop { $0 == "#" || $0 == " " }))).font(.headline).padding(.top, 6)
+                    Text(inline(String(line.drop { $0 == "#" || $0 == " " })))
+                        .font(Theme.display(15)).foregroundStyle(Theme.ink).padding(.top, 10)
                 } else if line.hasPrefix("- ") || line.hasPrefix("* ") {
-                    HStack(alignment: .top, spacing: 6) {
-                        Text("•")
-                        Text(inline(String(line.dropFirst(2))))
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Circle().fill(Theme.muted).frame(width: 4, height: 4).offset(y: -3)
+                        Text(inline(String(line.dropFirst(2)))).font(.system(size: 13)).foregroundStyle(Theme.ink).lineSpacing(3)
                     }
                 } else if !line.isEmpty {
-                    Text(inline(line))
+                    Text(inline(line)).font(.system(size: 13)).foregroundStyle(Theme.ink).lineSpacing(3)
                 }
             }
         }
