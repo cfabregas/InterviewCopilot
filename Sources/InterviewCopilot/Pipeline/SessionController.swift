@@ -46,6 +46,8 @@ final class SessionController: ObservableObject {
 
     /// 问题检测和答案生成
     let answers: AnswerEngine
+    /// 一场会话正常结束后调用(参数是会话编号)，用来启动会后处理
+    var onSessionEnded: ((Int64) -> Void)?
 
     init(answers: AnswerEngine) {
         self.answers = answers
@@ -89,7 +91,7 @@ final class SessionController: ObservableObject {
         openLineID = nil
 
         do {
-            if store == nil { store = try Store(url: AppPaths.database) }
+            if store == nil { store = Store.shared }
 
             // 翻译：语言包没装时仍然可以只转写
             let appleTranslator = AppleTranslator(source: mode.sourceLanguage, target: mode.targetLanguage)
@@ -196,10 +198,12 @@ final class SessionController: ObservableObject {
         isBusy = true
         defer { isBusy = false }
         status = "正在结束…"
+        let ended = sessionID
         await teardown()
         isRunning = false
         status = "已结束"
         Log.write("会话结束")
+        if ended >= 0 { onSessionEnded?(ended) }
     }
 
     private func teardown() async {

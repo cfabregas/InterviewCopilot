@@ -19,6 +19,9 @@ struct ControlView: View {
     @ObservedObject var log: LogStore
     @ObservedObject var answers: AnswerEngine
     @ObservedObject var resume: ResumeStore
+    var openReview: () -> Void = {}
+    /// 会话结束后是否自动做会后处理
+    @AppStorage("autoPostProcess") private var autoPost = true
     @State private var llmKeyInput = ""
     @State private var llmKeySaved = false
 
@@ -142,6 +145,12 @@ struct ControlView: View {
                 ResumeManagerView(resume: resume, answers: answers, locked: controller.isRunning) {
                     showingResumeManager = false
                 }
+            }
+
+            HStack {
+                Button("历史与复盘…") { openReview() }
+                Toggle("结束后自动整理(重新转写、翻译、问答评价和纪要)", isOn: $autoPost)
+                Spacer()
             }
 
             if controller.translationNeedsDownload {

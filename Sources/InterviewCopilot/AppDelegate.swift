@@ -1,4 +1,5 @@
 import AppKit
+import AVFoundation
 import Carbon.HIToolbox
 import Combine
 import SwiftUI
@@ -8,6 +9,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private let resume = ResumeStore()
     private lazy var answers = AnswerEngine(resume: resume)
     private lazy var controller = SessionController(answers: answers)
+    private lazy var post = PostProcessor(answers: answers)
+    private let reviewModel = ReviewModel()
+    private var reviewWindow: NSWindow?
     private var cardObserver: AnyCancellable?
     private let settings = OverlaySettings()
     private let logStore = LogStore()
@@ -27,7 +31,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                           backing: .buffered, defer: false)
         window.title = "面试助手"
         window.contentView = NSHostingView(rootView: ControlView(controller: controller, settings: settings, log: logStore,
-                                                                  answers: answers, resume: resume))
+                                                                  answers: answers, resume: resume,
+                                                                  openReview: { [weak self] in self?.showReview() }))
         window.center()
         window.isReleasedWhenClosed = false
         window.delegate = self
@@ -57,6 +62,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             panel.setFrame(frame, display: true, animate: false)
         }
 
+        // 会话结束后自动做会后处理(可在主窗口关掉)；太短或什么都没听到的不处理
+        controller.onSessionEnded = { [weak self] id in
+            guard let self, !CommandLine.arguments.contains("--autotest"),
+                  UserDefaults.standard.object(forKey: "autoPostProcess") as? Bool ?? true,
+                  let session = Store.shared?.session(id), session.segmentCount > 0 else { return }
+            Task { await self.post.process(id) }
+        }
+
         Log.write("启动，系统 \(ProcessInfo.processInfo.operatingSystemVersionString)")
 
         // 调试用：让悬浮窗出现在截屏里，方便检查布局
@@ -64,6 +77,78 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         if CommandLine.arguments.contains("--autotest") {
             Task { await runAutotest() }
+        }
+        if let dir = CommandLine.arguments.first(where: { $0.hasPrefix("--post-test=") })?.dropFirst(12) {
+            Task { await runPostTest(URL(fileURLWithPath: String(dir))) }
+        } else if CommandLine.arguments.contains("--show-review") {
+            showReview()
+        }
+    }
+
+    /// 打开历史与复盘窗口
+    func showReview() {
+        if reviewWindow == nil {
+            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1180, height: 760),
+                                  styleMask: [.titled, .closable, .miniaturizable, .resizable],
+                                  backing: .buffered, defer: false)
+            window.title = "历史与复盘"
+            window.contentView = NSHostingView(rootView: ReviewView(model: reviewModel, post: post))
+            window.isReleasedWhenClosed = false
+            window.center()
+            reviewWindow = window
+        }
+        reviewModel.reload()
+        reviewWindow?.makeKeyAndOrderFront(nil)
+    }
+
+    /// 自测：把一个目录里的 system.m4a / mic.m4a 当作一场刚结束的面试，跑一遍会后处理
+    private func runPostTest(_ source: URL) async {
+        guard let store = Store.shared else { return }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd-HHmmss"
+        let dir = AppPaths.sessions.appendingPathComponent(formatter.string(from: Date()) + "-posttest", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        var seconds = 0.0
+        for name in ["system.m4a", "mic.m4a"] {
+            let from = source.appendingPathComponent(name)
+            guard FileManager.default.fileExists(atPath: from.path) else { continue }
+            try? FileManager.default.copyItem(at: from, to: dir.appendingPathComponent(name))
+            if name == "system.m4a", let file = try? AVAudioFile(forReading: from) {
+                seconds = Double(file.length) / file.processingFormat.sampleRate
+            }
+        }
+        let mode: LanguageMode = CommandLine.arguments.contains("--mode=zh") ? .zhToEn : .enToZh
+        let id = store.createSession(mode: mode.rawValue, dir: dir.path)
+        let now = Date()
+        store.setAudioStart(session: id, system: now, mic: now)
+        store.run("UPDATE session SET ended_at = started_at + ? WHERE id = ?", [seconds, id])
+        Log.write("=== 会后处理自测开始：录音 \(Int(seconds)) 秒 ===")
+        await post.process(id)
+        for utterance in store.utterances(session: id) {
+            Log.write("  [\(Exporter.clock(utterance.startMs))] \(utterance.speaker)：\(utterance.text.prefix(90)) ‖ \(utterance.translation.prefix(50))")
+        }
+        for item in store.qaItems(session: id) {
+            Log.write("  问答 \(item.idx + 1) [\(item.kind)，评分 \(item.score)] \(item.question) ‖ 我的回答 \(item.myAnswer.count) 字，参考答案 \(item.reference.count) 字")
+        }
+        Log.write("  纪要：\n\(store.summary(session: id))")
+        if let session = store.session(id) {
+            let markdown = Exporter.markdown(session: session, summary: store.summary(session: id),
+                                             qa: store.qaItems(session: id), utterances: store.utterances(session: id))
+            try? markdown.write(to: dir.appendingPathComponent("export.md"), atomically: true, encoding: .utf8)
+            do {
+                try Exporter.writePDF(markdown: markdown, to: dir.appendingPathComponent("export.pdf"))
+                Log.write("  导出自测：Markdown \(markdown.count) 字，PDF 已写入 \(dir.path)")
+            } catch {
+                Log.write("  导出自测失败：\(error)")
+            }
+        }
+        Log.write("=== 会后处理自测结束 ===")
+        if CommandLine.arguments.contains("--show-review") {
+            reviewModel.selectedID = id
+            showReview()
+        } else {
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            NSApp.terminate(nil)
         }
     }
 
