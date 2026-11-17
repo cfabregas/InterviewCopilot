@@ -63,9 +63,9 @@ enum LanguageMode: String, CaseIterable, Identifiable {
 enum ASRLine: String, CaseIterable, Identifiable {
     case auto
     case local
+    case aliyun
     case deepgram
     case assemblyai
-    case aliyun
 
     var id: String { rawValue }
 
