@@ -333,7 +333,7 @@
   "官网": "Website",
   "打开官网申请或管理密钥": "Open the provider's website to get or manage a key",
   "已保存，粘贴可替换": "Saved. Paste to replace",
-  "逐个试调版本号不低于当前的通义千问模型，以及 DeepSeek、Kimi、GLM，只列出这个账号现在能调通的。首字延迟是单次测量，会有波动；GLM 不能关深度思考，首字会慢很多。": "Tries every Qwen model at or above your current version, plus DeepSeek, Kimi and GLM, and lists only the ones this account can call now. First-token latency is a single measurement and varies. GLM can't turn off deep thinking, so its first token is much slower.",
   "发现更新的千问版本，可以在下面选择。": "A newer Qwen version is available. Pick it below.",
-  "没有发现比当前更新的千问版本。": "No newer Qwen version found."
+  "没有发现比当前更新的千问版本。": "No newer Qwen version found.",
+  "逐个试调版本号不低于当前的通义千问模型，以及 DeepSeek 和 Kimi 的最新版本，只列出这个账号现在能调通的。首字延迟是单次测量，会有波动。": "Tries every Qwen model at or above your current version, plus the latest DeepSeek and Kimi versions, and lists only the ones this account can call now. First-token latency is a single measurement and varies."
 }
