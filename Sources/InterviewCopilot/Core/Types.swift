@@ -87,7 +87,7 @@ enum ASRLine: String, CaseIterable, Identifiable {
         for argument in CommandLine.arguments where argument.hasPrefix("--line=") {
             if let line = ASRLine(rawValue: String(argument.dropFirst(7))) { return line }
         }
-        return ASRLine(rawValue: UserDefaults.standard.string(forKey: "asrLine") ?? "") ?? .local
+        return ASRLine(rawValue: UserDefaults.standard.string(forKey: "asrLine") ?? "") ?? .aliyun
     }
 }
 
