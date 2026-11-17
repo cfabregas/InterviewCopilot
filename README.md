@@ -82,6 +82,10 @@
 - 录音、字幕和复盘都存在本机的应用数据目录里，可以随时在「历史复盘」里删除。
 - 转写和大模型请求会发送到你在设置里选择的云服务，不经过任何中间服务器。选择本地离线转写时，声音不会离开你的电脑。
 
+## 许可证
+
+[MIT](LICENSE)：可以自由使用、修改和分发，保留版权声明即可。
+
 ---
 
 ## English
@@ -92,3 +96,4 @@ InterviewCopilot is a macOS companion for online interviews. It transcribes and 
 - Download the latest build from [Releases](../../releases). The app isn't notarized: on first launch, go to System Settings › Privacy & Security and click "Open Anyway".
 - Bring your own API keys (Alibaba Cloud Bailian, Deepgram, AssemblyAI, or Anthropic). A single Alibaba Cloud Bailian key covers transcription, answers, reviews and mock-interview speech. Keys stay on your Mac.
 - The interface is available in Chinese and English and follows your system language by default.
+- Licensed under the [MIT License](LICENSE).
