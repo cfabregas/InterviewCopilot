@@ -51,30 +51,40 @@ private struct TwoColumnForm<Left: View, Right: View>: View {
     }
 }
 
-/// 一个密钥输入行：不回显已保存的内容，重新输入即替换，留空保存即清除
+/// 一个密钥输入行：不回显已保存的内容，重新输入即替换，留空保存即清除。
+/// 同一个密钥可能在几处出现(比如阿里云密钥同时给转写和大模型用)，保存后通知其他行刷新。
 private struct KeyRow: View {
+    static let changed = Notification.Name("KeyRow.changed")
     let title: String
     let account: String
-    var onChange: () -> Void = {}
     @State private var input = ""
     @State private var saved = false
 
     var body: some View {
-        GridRow {
-            Text(title)
-            SecureField("", text: $input, prompt: Text(saved ? L("已保存，重新输入可替换") : L("粘贴 API Key")))
-                .labelsHidden()
-                .textFieldStyle(.roundedBorder)
-            Button(input.isEmpty && saved ? L("清除") : L("保存")) {
-                saved = KeyStore.set(input, for: account) && !input.isEmpty
-                input = ""
-                Log.write("\(title)的密钥\(saved ? "已保存" : "已清除")")
-                onChange()
+        // 不用 LabeledContent：标签长一点时它会把输入框挤到下一行
+        HStack(spacing: 8) {
+            Text(title).fixedSize().padding(.trailing, 4)
+            HStack(spacing: 8) {
+                SecureField("", text: $input, prompt: Text(saved ? L("已保存，重新输入可替换") : L("粘贴 API Key")))
+                    .labelsHidden()
+                    .textFieldStyle(.roundedBorder)
+                    .multilineTextAlignment(.leading)
+                    .frame(minWidth: 120, maxWidth: .infinity)
+                Button(input.isEmpty && saved ? L("清除") : L("保存")) {
+                    saved = KeyStore.set(input, for: account) && !input.isEmpty
+                    input = ""
+                    Log.write("\(title)的密钥\(saved ? "已保存" : "已清除")")
+                    NotificationCenter.default.post(name: Self.changed, object: account)
+                }
+                .disabled(input.isEmpty && !saved)
+                Text(saved ? L("已保存") : L("未填")).foregroundStyle(saved ? Theme.good : Theme.warn)
+                    .frame(minWidth: 44, alignment: .leading).fixedSize()
             }
-            .disabled(input.isEmpty && !saved)
-            Text(saved ? L("已保存") : L("未填")).foregroundStyle(saved ? .green : .orange).frame(minWidth: 44, alignment: .leading).fixedSize()
         }
         .onAppear { saved = KeyStore.has(account) }
+        .onReceive(NotificationCenter.default.publisher(for: Self.changed)) { note in
+            if note.object as? String == account { saved = KeyStore.has(account) }
+        }
     }
 }
 
@@ -89,47 +99,80 @@ private struct LinesSettings: View {
     @AppStorage("autoPostProcess") private var autoPost = true
     @State private var showingModelCheck = false
 
+    /// 当前转写线路要用到的密钥；自动线路会在填了密钥的云端线路里挑最快的，所以三个都列出来
+    private var asrKeyLines: [ASRLine] {
+        switch controller.line {
+        case .local: return []
+        case .auto: return [.aliyun, .deepgram, .assemblyai]
+        default: return [controller.line]
+        }
+    }
+
+    private func keyTitle(_ line: ASRLine) -> String {
+        switch line {
+        case .aliyun: return L("阿里云百炼")
+        case .deepgram: return "Deepgram"
+        case .assemblyai: return "AssemblyAI"
+        default: return line.title
+        }
+    }
+
     var body: some View {
         TwoColumnForm {
-            Section(L("转写")) {
+            Section {
                 Picker(L("转写线路"), selection: $controller.line) {
                     ForEach(ASRLine.allCases) { Text($0.title).tag($0) }
                 }
+                ForEach(asrKeyLines) { line in
+                    KeyRow(title: L("%@ 密钥", keyTitle(line)), account: line.keyAccount ?? "")
+                }
+                if controller.line == .local {
+                    Text(L("本地线路在本机离线转写，不需要密钥。")).font(.caption).foregroundStyle(.secondary)
+                }
+                if asrKeyLines.contains(.aliyun) {
+                    TextField(L("阿里云接入地址"), text: $aliyunEndpoint, prompt: Text(AliyunASR.defaultEndpoint))
+                }
                 Toggle(L("录制麦克风(会后处理用)"), isOn: $controller.recordMic)
+            } header: {
+                Text(L("转写"))
+            } footer: {
+                Text(L("密钥明文存在本机应用数据目录。")).font(.caption).foregroundStyle(.secondary)
             }
             .disabled(controller.isRunning || controller.isBusy)
 
+            Section(L("会后")) {
+                Toggle(L("结束后自动整理(重新转写、翻译、问答评价和纪要)"), isOn: $autoPost)
+                if autoPost {
+                    // 转写那边已经列出 AssemblyAI 密钥时不再重复
+                    if !asrKeyLines.contains(.assemblyai) {
+                        KeyRow(title: L("%@ 密钥", "AssemblyAI"), account: ASRLine.assemblyai.keyAccount ?? "")
+                    }
+                    Text(L("会后用 AssemblyAI 重新转写整场录音，区分说话人更准；不填就用本机离线转写。"))
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
+        } right: {
             Section(L("大模型")) {
                 Picker(L("线路"), selection: $answers.llmLine) {
                     ForEach(LLMLine.allCases) { Text($0.title).tag($0) }
+                }
+                if answers.llmLine == .qwen {
+                    KeyRow(title: L("%@ 密钥", L("阿里云百炼")), account: LLMLine.qwen.keyAccount)
+                } else {
+                    KeyRow(title: L("%@ 密钥", "Anthropic"), account: LLMLine.claude.keyAccount)
                 }
                 TextField(L("快档模型"), text: answers.llmLine == .qwen ? $qwenFast : $claudeFast,
                           prompt: Text(LLMModels.defaultName(answers.llmLine, .fast)))
                 TextField(L("强档模型"), text: answers.llmLine == .qwen ? $qwenStrong : $claudeStrong,
                           prompt: Text(LLMModels.defaultName(answers.llmLine, .strong)))
                 HStack {
-                    Text(L("模型名留空用默认值")).font(.caption).foregroundStyle(.secondary)
+                    Text(answers.llmLine == .qwen ? L("阿里云密钥和转写共用，也用于模拟面试的语音合成。模型名留空用默认值。") : L("模型名留空用默认值"))
+                        .font(.caption).foregroundStyle(.secondary)
                     Spacer()
                     if answers.llmLine == .qwen { Button(L("检测新模型…")) { showingModelCheck = true } }
                 }
             }
             .disabled(controller.isRunning)
-        } right: {
-            Section(L("密钥(明文存在本机应用数据目录)")) {
-                Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 8) {
-                    KeyRow(title: L("阿里云百炼"), account: ASRLine.aliyun.keyAccount ?? "")
-                    KeyRow(title: "Deepgram", account: ASRLine.deepgram.keyAccount ?? "")
-                    KeyRow(title: "AssemblyAI", account: ASRLine.assemblyai.keyAccount ?? "")
-                    KeyRow(title: "Anthropic", account: LLMLine.claude.keyAccount)
-                }
-                Text(L("阿里云密钥同时用于国内转写、通义千问和模拟面试的语音合成；AssemblyAI 密钥同时用于会后重新转写。"))
-                    .font(.caption).foregroundStyle(.secondary)
-                TextField(L("阿里云接入地址"), text: $aliyunEndpoint, prompt: Text(AliyunASR.defaultEndpoint))
-            }
-
-            Section(L("会后")) {
-                Toggle(L("结束后自动整理(重新转写、翻译、问答评价和纪要)"), isOn: $autoPost)
-            }
         }
         .onAppear { if CommandLine.arguments.contains("--show-model-check") { showingModelCheck = true } }
         .sheet(isPresented: $showingModelCheck) { ModelCheckView { showingModelCheck = false } }

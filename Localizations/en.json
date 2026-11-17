@@ -41,7 +41,7 @@
   "线路、密钥、悬浮窗、快捷键和权限": "Providers, keys, overlay, shortcuts and permissions",
   "跟随系统": "System",
   "界面语言": "Interface language",
-  "已保存，重新输入可替换": "Saved. Type a new key to replace it",
+  "已保存，重新输入可替换": "Saved. Paste to replace",
   "粘贴 API Key": "Paste API key",
   "清除": "Clear",
   "保存": "Save",
@@ -51,7 +51,7 @@
   "转写线路": "Transcription provider",
   "录制麦克风(会后处理用)": "Record microphone (used for the review)",
   "密钥(明文存在本机应用数据目录)": "Keys (stored as plain text in the app data folder)",
-  "阿里云百炼": "Alibaba Cloud Bailian",
+  "阿里云百炼": "Alibaba Cloud",
   "阿里云密钥同时用于国内转写、通义千问和模拟面试的语音合成；AssemblyAI 密钥同时用于会后重新转写。": "The Alibaba Cloud key also powers Qwen and the mock interviewer's voice. The AssemblyAI key also powers re-transcription for reviews.",
   "阿里云接入地址": "Alibaba Cloud endpoint",
   "大模型": "Language model",
@@ -330,5 +330,10 @@
   "。": ". ",
   "怎么改": "How to change",
   "面试进行中这些快捷键在任何应用里都能用，主窗口不需要在前台。": "During an interview these shortcuts work in any app. The main window doesn't need to be in front.",
-  "还没有导入。导入后会自动从中抽取公司名、项目名和技术名词作为热词。": "Not imported yet. Once imported, company, project and technology names are extracted as terms automatically."
+  "还没有导入。导入后会自动从中抽取公司名、项目名和技术名词作为热词。": "Not imported yet. Once imported, company, project and technology names are extracted as terms automatically.",
+  "%@ 密钥": "%@ key",
+  "本地线路在本机离线转写，不需要密钥。": "The local line transcribes offline on this Mac and needs no key.",
+  "密钥明文存在本机应用数据目录。": "Keys are stored as plain text in the app's data folder on this Mac.",
+  "会后用 AssemblyAI 重新转写整场录音，区分说话人更准；不填就用本机离线转写。": "After the interview, AssemblyAI re-transcribes the whole recording and separates speakers more accurately. Without a key, the offline transcriber on this Mac is used.",
+  "阿里云密钥和转写共用，也用于模拟面试的语音合成。模型名留空用默认值。": "The Alibaba Cloud key is shared with transcription and mock-interview speech. Leave model names empty to use the defaults."
 }
