@@ -327,5 +327,8 @@
   "待跟进事项": "Follow-ups",
   "改进建议": "How to improve",
   "评分": "Score",
-  "。": ". "
+  "。": ". ",
+  "怎么改": "How to change",
+  "面试进行中这些快捷键在任何应用里都能用，主窗口不需要在前台。": "During an interview these shortcuts work in any app. The main window doesn't need to be in front.",
+  "还没有导入。导入后会自动从中抽取公司名、项目名和技术名词作为热词。": "Not imported yet. Once imported, company, project and technology names are extracted as terms automatically."
 }

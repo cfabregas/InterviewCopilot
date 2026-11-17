@@ -10,7 +10,6 @@ struct SettingsView: View {
     @ObservedObject var resume: ResumeStore
     @ObservedObject var checkup: Checkup
     @AppStorage("settingsTab") private var tab = "lines"
-    @ObservedObject private var l10n = L10n.shared
 
     private let tabs = [("lines", L("线路与密钥")), ("overlay", L("悬浮窗")), ("hotkeys", L("快捷键")), ("checkup", L("权限自检"))]
 
@@ -23,14 +22,6 @@ struct SettingsView: View {
                 .pickerStyle(.segmented)
                 .labelsHidden()
                 .frame(width: 380)
-                // 界面语言：选项来自语言文件，加一个文件就多一项
-                Picker("", selection: $l10n.choice) {
-                    Text(L("跟随系统")).tag("")
-                    ForEach(l10n.languages) { Text($0.name).tag($0.code) }
-                }
-                .labelsHidden()
-                .frame(width: 130)
-                .help(L("界面语言"))
             }
             Group {
                 switch tab {
@@ -42,7 +33,20 @@ struct SettingsView: View {
             }
             .scrollContentBackground(.hidden)
             .padding(.horizontal, 8)
-            .frame(maxWidth: 820, alignment: .leading)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
+    }
+}
+
+/// 两列的分组表单：窗口宽的时候左右并排，右边不会留下一大片空白
+private struct TwoColumnForm<Left: View, Right: View>: View {
+    @ViewBuilder var left: () -> Left
+    @ViewBuilder var right: () -> Right
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 0) {
+            Form { left() }.formStyle(.grouped).frame(maxWidth: .infinity)
+            Form { right() }.formStyle(.grouped).frame(maxWidth: .infinity)
         }
     }
 }
@@ -68,7 +72,7 @@ private struct KeyRow: View {
                 onChange()
             }
             .disabled(input.isEmpty && !saved)
-            Text(saved ? L("已保存") : L("未填")).foregroundStyle(saved ? .green : .orange).frame(width: 44, alignment: .leading)
+            Text(saved ? L("已保存") : L("未填")).foregroundStyle(saved ? .green : .orange).frame(minWidth: 44, alignment: .leading).fixedSize()
         }
         .onAppear { saved = KeyStore.has(account) }
     }
@@ -86,7 +90,7 @@ private struct LinesSettings: View {
     @State private var showingModelCheck = false
 
     var body: some View {
-        Form {
+        TwoColumnForm {
             Section(L("转写")) {
                 Picker(L("转写线路"), selection: $controller.line) {
                     ForEach(ASRLine.allCases) { Text($0.title).tag($0) }
@@ -94,18 +98,6 @@ private struct LinesSettings: View {
                 Toggle(L("录制麦克风(会后处理用)"), isOn: $controller.recordMic)
             }
             .disabled(controller.isRunning || controller.isBusy)
-
-            Section(L("密钥(明文存在本机应用数据目录)")) {
-                Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 8) {
-                    KeyRow(title: L("阿里云百炼"), account: ASRLine.aliyun.keyAccount ?? "")
-                    KeyRow(title: "Deepgram", account: ASRLine.deepgram.keyAccount ?? "")
-                    KeyRow(title: "AssemblyAI", account: ASRLine.assemblyai.keyAccount ?? "")
-                    KeyRow(title: "Anthropic", account: LLMLine.claude.keyAccount)
-                }
-                Text(L("阿里云密钥同时用于国内转写、通义千问和模拟面试的语音合成；AssemblyAI 密钥同时用于会后重新转写。"))
-                    .font(.caption).foregroundStyle(.secondary)
-                TextField(L("阿里云接入地址"), text: $aliyunEndpoint, prompt: Text(AliyunASR.defaultEndpoint))
-            }
 
             Section(L("大模型")) {
                 Picker(L("线路"), selection: $answers.llmLine) {
@@ -122,12 +114,23 @@ private struct LinesSettings: View {
                 }
             }
             .disabled(controller.isRunning)
+        } right: {
+            Section(L("密钥(明文存在本机应用数据目录)")) {
+                Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 8) {
+                    KeyRow(title: L("阿里云百炼"), account: ASRLine.aliyun.keyAccount ?? "")
+                    KeyRow(title: "Deepgram", account: ASRLine.deepgram.keyAccount ?? "")
+                    KeyRow(title: "AssemblyAI", account: ASRLine.assemblyai.keyAccount ?? "")
+                    KeyRow(title: "Anthropic", account: LLMLine.claude.keyAccount)
+                }
+                Text(L("阿里云密钥同时用于国内转写、通义千问和模拟面试的语音合成；AssemblyAI 密钥同时用于会后重新转写。"))
+                    .font(.caption).foregroundStyle(.secondary)
+                TextField(L("阿里云接入地址"), text: $aliyunEndpoint, prompt: Text(AliyunASR.defaultEndpoint))
+            }
 
             Section(L("会后")) {
                 Toggle(L("结束后自动整理(重新转写、翻译、问答评价和纪要)"), isOn: $autoPost)
             }
         }
-        .formStyle(.grouped)
         .onAppear { if CommandLine.arguments.contains("--show-model-check") { showingModelCheck = true } }
         .sheet(isPresented: $showingModelCheck) { ModelCheckView { showingModelCheck = false } }
     }
@@ -138,7 +141,7 @@ private struct OverlaySettingsPane: View {
     @ObservedObject var settings: OverlaySettings
 
     var body: some View {
-        Form {
+        TwoColumnForm {
             Section(L("显示")) {
                 Toggle(L("面试进行中显示悬浮窗"), isOn: $settings.visible)
                 Toggle(L("显示原文"), isOn: $settings.showSource)
@@ -149,6 +152,7 @@ private struct OverlaySettingsPane: View {
                     Text(L("背景不透明度 %@%%", "\(Int((settings.opacity * 100).rounded()))"))
                 }
             }
+        } right: {
             Section(L("交互")) {
                 Toggle(L("共享和截屏时隐藏"), isOn: $settings.hideFromSharing)
                 Toggle(L("鼠标穿透(点击落到下面的窗口)"), isOn: $settings.clickThrough)
@@ -156,7 +160,6 @@ private struct OverlaySettingsPane: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
-        .formStyle(.grouped)
     }
 }
 
@@ -167,7 +170,7 @@ private struct HotKeySettings: View {
     @State private var message = ""
 
     var body: some View {
-        Form {
+        TwoColumnForm {
             Section(L("全局快捷键(在任何应用里都有效)")) {
                 ForEach(HotKeyAction.allCases) { action in
                     HStack {
@@ -183,12 +186,14 @@ private struct HotKeySettings: View {
                     }
                 }
             }
-            Section {
+        } right: {
+            Section(L("怎么改")) {
                 Text(message.isEmpty ? L("点组合键按钮后按下新的组合，必须带 ⌃、⌥ 或 ⌘；按 Esc 取消。") : message)
-                    .font(.caption).foregroundStyle(message.isEmpty ? Color.secondary : Color.orange)
+                    .foregroundStyle(message.isEmpty ? Color.secondary : Color.orange)
+                Text(L("面试进行中这些快捷键在任何应用里都能用，主窗口不需要在前台。"))
+                    .foregroundStyle(.secondary)
             }
         }
-        .formStyle(.grouped)
         .onDisappear { stopRecording() }
     }
 
@@ -374,7 +379,7 @@ private struct CheckupPane: View {
     }
 
     var body: some View {
-        Form {
+        TwoColumnForm {
             Section(L("系统权限")) {
                 row(L("麦克风"), checkup.microphone) {
                     if case .warning = checkup.microphone { Button(L("请求授权")) { checkup.requestMicrophone() } }
@@ -385,11 +390,6 @@ private struct CheckupPane: View {
                     Button(L("打开系统设置")) { Checkup.openPrivacy("Privacy_AudioCapture") }
                 }
             }
-            Section(L("配置")) {
-                row(L("密钥"), checkup.keys) { EmptyView() }
-                row(L("本地翻译语言包"), checkup.translation) { EmptyView() }
-                row(L("简历"), .ok(ResumeSlot.allCases.map { L("%@%@", $0.title, resume.texts[$0] == nil ? L("未导入") : L("已导入")) }.joined(separator: L("，")))) { EmptyView() }
-            }
             Section {
                 HStack {
                     Text(L("系统没有提供查询\"系统声音录制\"权限的办法，只能实际采集一下来判断。"))
@@ -398,8 +398,13 @@ private struct CheckupPane: View {
                     Button(L("重新检查")) { checkup.refresh() }
                 }
             }
+        } right: {
+            Section(L("配置")) {
+                row(L("密钥"), checkup.keys) { EmptyView() }
+                row(L("本地翻译语言包"), checkup.translation) { EmptyView() }
+                row(L("简历"), .ok(ResumeSlot.allCases.map { L("%@%@", $0.title, resume.texts[$0] == nil ? L("未导入") : L("已导入")) }.joined(separator: L("，")))) { EmptyView() }
+            }
         }
-        .formStyle(.grouped)
         .onAppear { checkup.refresh() }
     }
 }

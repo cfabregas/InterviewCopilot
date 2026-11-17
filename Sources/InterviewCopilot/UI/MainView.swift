@@ -112,12 +112,43 @@ struct MainView: View {
                 .padding(.horizontal, 10)
                 .padding(.bottom, 6)
             }
+            languageMenu
             item(.settings)
             Color.clear.frame(height: 12)
         }
         .frame(width: L10n.shared.isSource ? 196 : 216)
         .frame(maxHeight: .infinity)
         .background(Theme.curtain)
+    }
+
+    /// 界面语言：选项来自语言文件，加一个文件就多一项
+    private var languageMenu: some View {
+        Menu {
+            Picker("", selection: $l10n.choice) {
+                Text(L("跟随系统")).tag("")
+                ForEach(l10n.languages) { Text($0.name).tag($0.code) }
+            }
+            .pickerStyle(.inline)
+            .labelsHidden()
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "globe").frame(width: 18)
+                Text(l10n.choice.isEmpty ? L("跟随系统") : (l10n.languages.first { $0.code == l10n.choice }?.name ?? l10n.choice))
+                    .lineLimit(1)
+                Spacer()
+                Image(systemName: "chevron.up.chevron.down").font(.system(size: 9, weight: .semibold))
+            }
+            .font(.system(size: 13))
+            .foregroundStyle(Theme.onCurtainMuted)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .contentShape(Rectangle())
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .help(L("界面语言"))
+        .padding(.horizontal, 8)
     }
 
     private func isLive(_ page: Page) -> Bool {

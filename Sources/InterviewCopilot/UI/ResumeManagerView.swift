@@ -26,58 +26,76 @@ struct ResumeManagerView: View {
                         .frame(maxWidth: 720, alignment: .leading)
                         .fixedSize(horizontal: false, vertical: true)
 
-                    ForEach(ResumeSlot.allCases) { slot in
+                    // 两份简历左右并排
+                    HStack(alignment: .top, spacing: 32) {
+                        ForEach(ResumeSlot.allCases) { slot in
+                            resumeColumn(slot).frame(maxWidth: .infinity, alignment: .topLeading)
+                        }
+                    }
+
+                    // 手动热词和岗位描述也左右并排
+                    HStack(alignment: .top, spacing: 32) {
                         VStack(alignment: .leading, spacing: 12) {
-                            SectionRule(title: slot.title)
-                            HStack(spacing: 10) {
-                                Image(systemName: resume.texts[slot] == nil ? "doc" : "doc.text.fill")
-                                    .foregroundStyle(resume.texts[slot] == nil ? Theme.muted : Theme.accent)
-                                Text(resume.summary(slot)).font(.system(size: 13)).foregroundStyle(Theme.ink).lineLimit(1)
-                                Spacer()
-                                Button(resume.texts[slot] == nil ? L("导入…") : L("更换…")) { importResume(slot) }
-                                    .buttonStyle(QuietButtonStyle())
-                                Button(L("清除")) { resume.clear(slot) }
-                                    .buttonStyle(QuietButtonStyle())
-                                    .disabled(resume.texts[slot] == nil)
-                            }
-                            if resume.texts[slot] != nil {
-                                HStack {
-                                    Text(L("这份简历的热词")).font(.system(size: 12)).foregroundStyle(Theme.muted)
-                                    Spacer()
-                                    Button(resume.analyzing.contains(slot) ? L("正在抽取…") : L("重新抽取")) { extract(slot) }
-                                        .buttonStyle(LinkButtonStyle())
-                                        .disabled(resume.analyzing.contains(slot))
-                                }
-                                TermChips(terms: resume.terms[slot] ?? [], locked: locked) {
-                                    resume.setTerms(slot, $0)
-                                }
+                            SectionRule(title: L("手动添加的热词"))
+                            TermChips(terms: manualList, locked: locked) {
+                                manualTerms = $0.joined(separator: ", ")
                             }
                         }
                         .disabled(locked)
-                    }
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
 
-                    VStack(alignment: .leading, spacing: 12) {
-                        SectionRule(title: L("手动添加的热词"))
-                        TermChips(terms: manualList, locked: locked) {
-                            manualTerms = $0.joined(separator: ", ")
+                        VStack(alignment: .leading, spacing: 12) {
+                            SectionRule(title: L("岗位描述，可以不填"))
+                            TextEditor(text: $resume.jd)
+                                .font(.system(size: 13))
+                                .scrollContentBackground(.hidden)
+                                .frame(height: 140)
+                                .surface(radius: 8, padding: 8)
                         }
-                    }
-                    .disabled(locked)
-
-                    VStack(alignment: .leading, spacing: 12) {
-                        SectionRule(title: L("岗位描述，可以不填"))
-                        TextEditor(text: $resume.jd)
-                            .font(.system(size: 13))
-                            .scrollContentBackground(.hidden)
-                            .frame(height: 120)
-                            .surface(radius: 8, padding: 8)
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
                     }
                 }
                 .padding(.horizontal, 28)
                 .padding(.bottom, 28)
-                .frame(maxWidth: 860, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
+    }
+
+    /// 一份简历：文件、更换和清除，以及从它抽出来的热词
+    private func resumeColumn(_ slot: ResumeSlot) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionRule(title: slot.title)
+            HStack(spacing: 10) {
+                Image(systemName: resume.texts[slot] == nil ? "doc" : "doc.text.fill")
+                    .foregroundStyle(resume.texts[slot] == nil ? Theme.muted : Theme.accent)
+                Text(resume.summary(slot)).font(.system(size: 13)).foregroundStyle(Theme.ink)
+                    .lineLimit(1).truncationMode(.middle)
+                Spacer(minLength: 8)
+                Button(resume.texts[slot] == nil ? L("导入…") : L("更换…")) { importResume(slot) }
+                    .buttonStyle(QuietButtonStyle())
+                Button(L("清除")) { resume.clear(slot) }
+                    .buttonStyle(QuietButtonStyle())
+                    .disabled(resume.texts[slot] == nil)
+            }
+            if resume.texts[slot] != nil {
+                HStack {
+                    Text(L("这份简历的热词")).font(.system(size: 12)).foregroundStyle(Theme.muted)
+                    Spacer()
+                    Button(resume.analyzing.contains(slot) ? L("正在抽取…") : L("重新抽取")) { extract(slot) }
+                        .buttonStyle(LinkButtonStyle())
+                        .disabled(resume.analyzing.contains(slot))
+                }
+                TermChips(terms: resume.terms[slot] ?? [], locked: locked) {
+                    resume.setTerms(slot, $0)
+                }
+            } else {
+                Text(L("还没有导入。导入后会自动从中抽取公司名、项目名和技术名词作为热词。"))
+                    .font(.system(size: 12)).foregroundStyle(Theme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .disabled(locked)
     }
 
     private func importResume(_ slot: ResumeSlot) {
