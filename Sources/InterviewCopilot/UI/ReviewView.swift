@@ -122,7 +122,7 @@ final class ReviewModel: ObservableObject {
     }
 }
 
-/// 复盘页：左边是历史面试，右边是选中那场的时间轴、纪要和问答
+/// 历史复盘页：左边是历史面试，右边是选中那场的时间轴、纪要和问答
 struct ReviewView: View {
     @ObservedObject var model: ReviewModel
     @ObservedObject var post: PostProcessor
@@ -130,7 +130,7 @@ struct ReviewView: View {
     var body: some View {
         HStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 0) {
-                Text(L("复盘")).font(Theme.display(26)).foregroundStyle(Theme.ink)
+                Text(L("历史复盘")).font(Theme.display(26)).foregroundStyle(Theme.ink)
                     .padding(.horizontal, 18).padding(.top, 22).padding(.bottom, 12)
                 HStack(spacing: 6) {
                     Image(systemName: "magnifyingglass").foregroundStyle(Theme.muted)
@@ -168,7 +168,7 @@ struct ReviewView: View {
                     }
                 }
                 if model.visibleSessions.isEmpty {
-                    Text(model.sessions.isEmpty ? L("还没有面试记录。完成一场听译或模拟面试后会出现在这里。") : L("没有找到匹配的面试。"))
+                    Text(model.sessions.isEmpty ? L("还没有面试记录。完成一场面试或模拟面试后会出现在这里。") : L("没有找到匹配的面试。"))
                         .font(.system(size: 13)).foregroundStyle(Theme.muted).padding(18)
                     Spacer()
                 }

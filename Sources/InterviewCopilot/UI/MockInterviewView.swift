@@ -27,7 +27,8 @@ struct MockInterviewView: View {
     private func field(_ title: String, @ViewBuilder control: () -> some View) -> some View {
         VStack(spacing: 0) {
             HStack {
-                Text(title).font(.system(size: 13)).foregroundStyle(Theme.muted).frame(width: 84, alignment: .leading)
+                Text(title).font(.system(size: 13)).foregroundStyle(Theme.muted).lineLimit(1)
+                    .frame(width: L10n.shared.isSource ? 84 : 170, alignment: .leading)
                 control()
                 Spacer()
             }
@@ -42,7 +43,7 @@ struct MockInterviewView: View {
                 Text(L("坐下来，像真的一样答一遍。"))
                     .font(Theme.script(24))
                     .foregroundStyle(Theme.onCurtain)
-                Text(resumeLine + "。" + (resume.jd.isEmpty ? L("还没有填岗位描述，填了题目会更贴近岗位。") : L("岗位描述已填写 %@ 字。", "\(resume.jd.count)")))
+                Text(resumeLine + L("。") + (resume.jd.isEmpty ? L("还没有填岗位描述，填了题目会更贴近岗位。") : L("岗位描述已填写 %@ 字。", "\(resume.jd.count)")))
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.onCurtainMuted)
                 HStack(spacing: 14) {

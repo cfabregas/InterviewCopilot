@@ -12,7 +12,7 @@ final class LogStore: ObservableObject {
     }
 }
 
-/// 听译页：一块深色的"台口"放开始按钮、提示灯、计时和字幕预览，下面是准备情况、快捷键和运行日志
+/// 面试助手页：一块深色的"台口"放开始按钮、提示灯、计时和字幕预览，下面是准备情况、快捷键和运行日志
 struct ListenPage: View {
     @ObservedObject var navigator: Navigator
     @ObservedObject var controller: SessionController
@@ -25,7 +25,7 @@ struct ListenPage: View {
     /// 日志区域是否展开(记住上次的选择)
     @AppStorage("showLog") private var showLog = false
     @State private var downloadConfig: TranslationSession.Configuration?
-    /// 热词表：提高专有名词的转写准确率，下次开始听译时生效
+    /// 热词表：提高专有名词的转写准确率，下次开始面试时生效
     @AppStorage(Terms.defaultsKey) private var terms = ""
     @AppStorage(LLMModels.key(.qwen, .strong)) private var qwenStrong = ""
     @AppStorage(LLMModels.key(.claude, .strong)) private var claudeStrong = ""
@@ -37,7 +37,7 @@ struct ListenPage: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            PageHeader(title: L("听译"), subtitle: L("听对方说话，实时出字幕、译文和回答提示"))
+            PageHeader(title: L("面试助手"), subtitle: L("听对方说话，实时出字幕、译文和回答提示"))
             VStack(alignment: .leading, spacing: 22) {
                 stagePanel
                 readiness
@@ -55,7 +55,7 @@ struct ListenPage: View {
             do {
                 try await session.prepareTranslation()
                 controller.translationNeedsDownload = false
-                Log.write("翻译语言包已就绪，下次开始听译时生效")
+                Log.write("翻译语言包已就绪，下次开始面试时生效")
             } catch {
                 Log.write("翻译语言包下载未完成：\(error)")
             }
@@ -107,7 +107,7 @@ struct ListenPage: View {
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
-                .frame(width: 230)
+                .fixedSize()
                 .disabled(controller.isRunning || controller.isBusy)
 
                 Toggle(L("实时答案"), isOn: $answers.enabled)
@@ -117,7 +117,7 @@ struct ListenPage: View {
 
                 Spacer()
 
-                Button(controller.isRunning ? L("结束") : L("开始听译")) {
+                Button(controller.isRunning ? L("结束") : L("开始面试")) {
                     Task {
                         if controller.isRunning { await controller.stop() } else { await controller.start() }
                     }
@@ -149,7 +149,7 @@ struct ListenPage: View {
                 good: KeyStore.has(answers.llmLine.keyAccount)) {
                 Button(L("更改")) { open("lines") }.buttonStyle(LinkButtonStyle())
             }
-            row(L("简历"), ResumeSlot.allCases.map { L("%@%@", $0.title, resume.texts[$0] == nil ? L("未导入") : L("已导入")) }.joined(separator: "，")
+            row(L("简历"), ResumeSlot.allCases.map { L("%@%@", $0.title, resume.texts[$0] == nil ? L("未导入") : L("已导入")) }.joined(separator: L("，"))
                 + L("，热词 %@ 个", "\(termCount)"), good: !resume.texts.isEmpty) {
                 Button(L("管理")) { navigator.page = .resume }.buttonStyle(LinkButtonStyle())
             }
@@ -180,7 +180,8 @@ struct ListenPage: View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
                 Circle().fill(good ? Theme.good : Theme.warn).frame(width: 7, height: 7)
-                Text(title).font(.system(size: 13)).foregroundStyle(Theme.muted).frame(width: 76, alignment: .leading)
+                Text(title).font(.system(size: 13)).foregroundStyle(Theme.muted).lineLimit(1)
+                    .frame(width: L10n.shared.isSource ? 76 : 150, alignment: .leading)
                 Text(value).font(.system(size: 13)).foregroundStyle(Theme.ink).lineLimit(1)
                 Spacer()
                 action()

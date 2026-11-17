@@ -184,7 +184,7 @@ final class SessionController: ObservableObject {
             }
             isRunning = true
             answers.sessionStarted(mode: mode)
-            status = (translator == nil ? L("正在听(仅转写)") : L("正在听译")) + " · " + route
+            status = (translator == nil ? L("正在听(仅转写)") : L("面试进行中")) + " · " + route
             Log.write("会话开始：\(mode.title)，目录 \(dir.lastPathComponent)")
         } catch {
             status = L("启动失败：%@", "\(error)")
@@ -266,7 +266,7 @@ final class SessionController: ObservableObject {
             Task { @MainActor in
                 guard let self, self.isRunning else { return }
                 self.route = description
-                self.status = (self.translator == nil ? L("正在听(仅转写)") : L("正在听译")) + " · " + description
+                self.status = (self.translator == nil ? L("正在听(仅转写)") : L("面试进行中")) + " · " + description
             }
         }
         return resilient

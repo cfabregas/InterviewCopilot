@@ -1,5 +1,5 @@
 #!/bin/bash
-# 构建面试助手并打包成 .app(系统权限弹窗需要 app 包和 Info.plist)。
+# 构建千人千面(InterviewCopilot)并打包成 .app(系统权限弹窗需要 app 包和 Info.plist)。
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -17,7 +17,8 @@ cp Localizations/*.json "$APP/Contents/Resources/Localizations/"
 # 系统权限弹窗里的说明文字也给一份英文
 mkdir -p "$APP/Contents/Resources/en.lproj" "$APP/Contents/Resources/zh-Hans.lproj"
 cat > "$APP/Contents/Resources/en.lproj/InfoPlist.strings" <<'STRINGS'
-"CFBundleName" = "Interview Copilot";
+"CFBundleName" = "InterviewCopilot";
+"CFBundleDisplayName" = "InterviewCopilot";
 "NSAudioCaptureUsageDescription" = "Captures the other side's audio in a meeting for live transcription and translation.";
 "NSMicrophoneUsageDescription" = "Records your own voice for the post-interview review and mock interviews.";
 "NSSpeechRecognitionUsageDescription" = "Transcribes speech to text on this Mac.";
@@ -30,7 +31,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <plist version="1.0">
 <dict>
     <key>CFBundleIdentifier</key><string>local.interviewcopilot.app</string>
-    <key>CFBundleName</key><string>面试助手</string>
+    <key>CFBundleName</key><string>千人千面</string>
+    <key>CFBundleDisplayName</key><string>千人千面</string>
     <key>CFBundleDevelopmentRegion</key><string>zh-Hans</string>
     <key>CFBundleExecutable</key><string>InterviewCopilot</string>
     <key>CFBundlePackageType</key><string>APPL</string>

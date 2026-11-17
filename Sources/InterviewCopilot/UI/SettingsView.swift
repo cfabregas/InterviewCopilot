@@ -152,7 +152,7 @@ private struct OverlaySettingsPane: View {
             Section(L("交互")) {
                 Toggle(L("共享和截屏时隐藏"), isOn: $settings.hideFromSharing)
                 Toggle(L("鼠标穿透(点击落到下面的窗口)"), isOn: $settings.clickThrough)
-                Text(L("悬浮窗在开始听译后出现，结束后收起。关闭鼠标穿透后可以直接拖动，拖边缘可调整大小。"))
+                Text(L("悬浮窗在开始面试后出现，结束后收起。关闭鼠标穿透后可以直接拖动，拖边缘可调整大小。"))
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
@@ -263,7 +263,7 @@ final class Checkup: ObservableObject {
         switch AVCaptureDevice.authorizationStatus(for: .audio) {
         case .authorized: microphone = .ok(L("已允许"))
         case .notDetermined: microphone = .warning(L("麦克风还没有授权：录制自己的发言和模拟面试都需要"))
-        default: microphone = .failed(L("麦克风权限被拒绝：请在系统设置里允许面试助手"))
+        default: microphone = .failed(L("麦克风权限被拒绝：请在系统设置里允许千人千面"))
         }
         let names = [(L("阿里云"), ASRLine.aliyun.keyAccount), ("Deepgram", ASRLine.deepgram.keyAccount),
                      ("AssemblyAI", ASRLine.assemblyai.keyAccount), ("Anthropic", Optional(LLMLine.claude.keyAccount))]
@@ -325,7 +325,7 @@ final class Checkup: ObservableObject {
             }
             if outcome.started { tap.stop() }
             if !finished && !outcome.started {
-                systemAudio = .failed(L("系统声音采集没有响应：请在系统设置里允许面试助手录制系统音频"))
+                systemAudio = .failed(L("系统声音采集没有响应：请在系统设置里允许千人千面录制系统音频"))
             } else if let error = outcome.error {
                 systemAudio = .failed(L("系统声音采集启动失败：%@", "\(error)"))
             } else if outcome.peak > 0.001 {
@@ -388,7 +388,7 @@ private struct CheckupPane: View {
             Section(L("配置")) {
                 row(L("密钥"), checkup.keys) { EmptyView() }
                 row(L("本地翻译语言包"), checkup.translation) { EmptyView() }
-                row(L("简历"), .ok(ResumeSlot.allCases.map { L("%@%@", $0.title, resume.texts[$0] == nil ? L("未导入") : L("已导入")) }.joined(separator: "，"))) { EmptyView() }
+                row(L("简历"), .ok(ResumeSlot.allCases.map { L("%@%@", $0.title, resume.texts[$0] == nil ? L("未导入") : L("已导入")) }.joined(separator: L("，")))) { EmptyView() }
             }
             Section {
                 HStack {

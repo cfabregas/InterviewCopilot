@@ -37,7 +37,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1200, height: 760),
                           styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
                           backing: .buffered, defer: false)
-        window.title = "面试助手"
+        window.title = L("千人千面")
         // 侧栏一直铺到窗口顶端，标题栏只留三个按钮
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
@@ -268,9 +268,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let settingsItem = appMenu.addItem(withTitle: L("设置…"), action: #selector(openSettingsFromMenu), keyEquivalent: ",")
         settingsItem.target = self
         appMenu.addItem(.separator())
-        appMenu.addItem(withTitle: L("隐藏面试助手"), action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
+        appMenu.addItem(withTitle: L("隐藏千人千面"), action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
         appMenu.addItem(.separator())
-        appMenu.addItem(withTitle: L("退出面试助手"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        appMenu.addItem(withTitle: L("退出千人千面"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         appItem.submenu = appMenu
         main.addItem(appItem)
 

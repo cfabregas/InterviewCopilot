@@ -391,7 +391,7 @@ final class MockInterview: ObservableObject {
             return
         }
         guard await MicRecorder.requestPermission() else {
-            throw AppError(L("没有麦克风权限，请在 系统设置 › 隐私与安全性 › 麦克风 里允许面试助手"))
+            throw AppError(L("没有麦克风权限，请在 系统设置 › 隐私与安全性 › 麦克风 里允许千人千面"))
         }
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         self.dir = dir
@@ -497,7 +497,7 @@ final class MockInterview: ObservableObject {
         let title = store.session(id)?.title ?? ""
         store.setTitle(session: id, title: title.isEmpty ? L("模拟面试") : L("模拟 · ") + title)
         reviewReady = store.jobs(session: id)[.analyze]?.status == "done"
-        status = reviewReady ? L("复盘已生成") : L("复盘没有全部完成，可以在历史与复盘里继续处理")
+        status = reviewReady ? L("复盘已生成") : L("复盘没有全部完成，可以在历史复盘里继续处理")
         phase = .finished
     }
 }

@@ -1,11 +1,11 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// 简历与热词页：导入、更换、清除两份简历，查看和编辑每份简历带来的热词，以及手动添加的热词和岗位描述。
+/// 简历管理页：导入、更换、清除两份简历，查看和编辑每份简历带来的热词，以及手动添加的热词和岗位描述。
 struct ResumeManagerView: View {
     @ObservedObject var resume: ResumeStore
     @ObservedObject var answers: AnswerEngine
-    let locked: Bool          // 听译进行中不允许改
+    let locked: Bool          // 面试进行中不允许改
     @AppStorage(Terms.defaultsKey) private var manualTerms = ""
 
     private var manualList: [String] { Terms.split(manualTerms) }
@@ -13,14 +13,14 @@ struct ResumeManagerView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            PageHeader(title: L("简历与热词"), subtitle: L("答案和题目都从这里来")) {
-                Text(locked ? L("听译进行中，结束后才能修改") : L("生效的热词 %@ 个，上限 100 个", "\(totalCount)"))
+            PageHeader(title: L("简历管理"), subtitle: L("答案和题目都从这里来")) {
+                Text(locked ? L("面试进行中，结束后才能修改") : L("生效的热词 %@ 个，上限 100 个", "\(totalCount)"))
                     .font(.system(size: 12))
                     .foregroundStyle(locked || totalCount >= 100 ? Theme.warn : Theme.muted)
             }
             ScrollView {
                 VStack(alignment: .leading, spacing: 26) {
-                    Text(L("英文面试优先用英文简历，中文面试优先用中文简历；只导入了一份时两种面试都用它。热词用来提高转写对专有名词的准确率，改动在下次开始听译时生效。"))
+                    Text(L("英文面试优先用英文简历，中文面试优先用中文简历；只导入了一份时两种面试都用它。热词用来提高转写对专有名词的准确率，改动在下次开始面试时生效。"))
                         .font(.system(size: 13)).foregroundStyle(Theme.muted)
                         .lineSpacing(3)
                         .frame(maxWidth: 720, alignment: .leading)

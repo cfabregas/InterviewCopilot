@@ -8,10 +8,10 @@ enum Page: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .listen: return L("听译")
+        case .listen: return L("面试助手")
         case .mock: return L("模拟面试")
-        case .review: return L("复盘")
-        case .resume: return L("简历与热词")
+        case .review: return L("历史复盘")
+        case .resume: return L("简历管理")
         case .settings: return L("设置")
         }
     }
@@ -85,7 +85,7 @@ struct MainView: View {
         VStack(alignment: .leading, spacing: 2) {
             // 给窗口左上角的三个按钮让出位置
             Color.clear.frame(height: 46)
-            Text(L("面试助手"))
+            Text(L("千人千面"))
                 .font(Theme.display(20))
                 .foregroundStyle(Theme.onCurtain)
                 .padding(.horizontal, 18)
@@ -115,7 +115,7 @@ struct MainView: View {
             item(.settings)
             Color.clear.frame(height: 12)
         }
-        .frame(width: 196)
+        .frame(width: L10n.shared.isSource ? 196 : 216)
         .frame(maxHeight: .infinity)
         .background(Theme.curtain)
     }
@@ -134,7 +134,7 @@ struct MainView: View {
         } label: {
             HStack(spacing: 10) {
                 Image(systemName: page.symbol).frame(width: 18)
-                Text(page.title)
+                Text(page.title).lineLimit(1)
                 Spacer()
                 if page == .review, post.running != nil {
                     ProgressView().controlSize(.mini).colorScheme(.dark)
