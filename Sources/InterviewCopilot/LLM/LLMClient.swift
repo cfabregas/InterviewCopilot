@@ -52,7 +52,7 @@ enum LLMModels {
     static func defaultName(_ line: LLMLine, _ tier: LLMTier) -> String {
         switch (line, tier) {
         case (.qwen, .fast): return "qwen3.8-flash"
-        case (.qwen, .strong): return "qwen3.8-max"
+        case (.qwen, .strong): return "qwen4-max"
         case (.claude, .fast): return "claude-haiku-5-5"
         case (.claude, .strong): return "claude-sonnet-5-5"
         }
