@@ -17,7 +17,6 @@
   "关闭答案卡": "Dismiss answer card",
   "空格": "Space",
   "检测新模型": "Check for new models",
-  "逐个试调版本号不低于当前的通义千问模型，只列出这个账号现在能调通的。首字延迟是单次测量，会有波动。": "Tries each Qwen model at or above your current version and lists only the ones this account can call. First-token latency is a single measurement and will vary.",
   "当前：快档 %@，强档 %@": "Current: fast tier %@, strong tier %@",
   "正在试调，大约需要十几秒…": "Probing models. This takes ten seconds or so…",
   "模型": "Model",
@@ -31,8 +30,6 @@
   "设为%@": "Use as %@",
   "还没有填写阿里云密钥，无法检测。": "Add an Alibaba Cloud key first.",
   "没有调通任何模型，请检查密钥和网络。": "No model responded. Check your key and network.",
-  "发现更新的版本，可以在下面选择。": "Newer versions are available below.",
-  "没有发现比当前更新的可用模型。": "No newer model is available.",
   "悬浮窗": "Overlay",
   "快捷键": "Shortcuts",
   "权限自检": "Permissions",
@@ -335,5 +332,8 @@
   "大模型、悬浮窗、快捷键和权限": "Models, overlay, shortcuts and permissions",
   "官网": "Website",
   "打开官网申请或管理密钥": "Open the provider's website to get or manage a key",
-  "已保存，粘贴可替换": "Saved. Paste to replace"
+  "已保存，粘贴可替换": "Saved. Paste to replace",
+  "逐个试调版本号不低于当前的通义千问模型，以及 DeepSeek、Kimi、GLM，只列出这个账号现在能调通的。首字延迟是单次测量，会有波动；GLM 不能关深度思考，首字会慢很多。": "Tries every Qwen model at or above your current version, plus DeepSeek, Kimi and GLM, and lists only the ones this account can call now. First-token latency is a single measurement and varies. GLM can't turn off deep thinking, so its first token is much slower.",
+  "发现更新的千问版本，可以在下面选择。": "A newer Qwen version is available. Pick it below.",
+  "没有发现比当前更新的千问版本。": "No newer Qwen version found."
 }

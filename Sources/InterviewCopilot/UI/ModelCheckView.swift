@@ -14,7 +14,7 @@ struct ModelCheckView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(L("检测新模型")).font(.headline)
-            Text(L("逐个试调版本号不低于当前的通义千问模型，只列出这个账号现在能调通的。首字延迟是单次测量，会有波动。"))
+            Text(L("逐个试调版本号不低于当前的通义千问模型，以及 DeepSeek、Kimi、GLM，只列出这个账号现在能调通的。首字延迟是单次测量，会有波动；GLM 不能关深度思考，首字会慢很多。"))
                 .font(.caption).foregroundStyle(.secondary)
             Text(L("当前：快档 %@，强档 %@", "\(current(.fast))", "\(current(.strong))"))
 
@@ -79,11 +79,11 @@ struct ModelCheckView: View {
             let found = await ModelProbe.run(apiKey: key)
             results = found
             checking = false
-            let newest = found.map(\.version).max() ?? 0
+            let newest = found.filter { !$0.grade.isEmpty }.map(\.version).max() ?? 0
             let mine = LLMTier.allCases.compactMap { ModelProbe.parse(current($0))?.version }.max() ?? 0
             if found.isEmpty { message = L("没有调通任何模型，请检查密钥和网络。") }
-            else if newest > mine { message = L("发现更新的版本，可以在下面选择。") }
-            else { message = L("没有发现比当前更新的可用模型。") }
+            else if newest > mine { message = L("发现更新的千问版本，可以在下面选择。") }
+            else { message = L("没有发现比当前更新的千问版本。") }
         }
     }
 }

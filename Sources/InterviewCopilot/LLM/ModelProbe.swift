@@ -1,19 +1,22 @@
 import Foundation
 
-/// 检测通义千问有没有比当前更新的模型可用。
+/// 检测通义千问有没有比当前更新的模型可用，顺带测几个百炼上的其他厂家模型。
 /// 官方没有可靠的"最新"别名，模型列表接口也会比实际上线晚，所以两头都查：
 /// 列表里有的拿来试，列表里没有但版本号更高的名字也猜着试，能调通的才算数。
 enum ModelProbe {
     struct Result: Identifiable, Hashable {
         var id: String { model }
         let model: String
-        let version: Double
-        let grade: String          // max、plus、flash
+        let version: Double        // 千问的版本号；百炼上的其他模型记 0
+        let grade: String          // max、plus、flash；其他模型为空
         let firstTokenMs: Int      // 首字延迟
         let listed: Bool           // 是否出现在账号的模型列表里
     }
 
     static let grades = ["max", "plus", "flash"]
+
+    /// 百炼上可以直接调的其他厂家模型，固定加进来一起比
+    static let others = ["deepseek-v4.1-flash", "kimi-k3", "glm-5.3"]
 
     /// "qwen3.8-max" → (3.8, "max")；带日期、preview 或其他用途的型号不算
     static func parse(_ id: String) -> (version: Double, grade: String)? {
@@ -69,22 +72,28 @@ enum ModelProbe {
         let listed = await listModels(apiKey: apiKey)
         let current = LLMTier.allCases.compactMap { parse(LLMModels.name(.qwen, $0))?.version }
         let floor = current.min() ?? 3.8
-        let names = candidates(listed: listed, floor: floor)
+        let names = candidates(listed: listed, floor: floor) + others
         let listedSet = Set(listed)
         var results: [Result] = []
         await withTaskGroup(of: Result?.self) { group in
             for model in names {
                 group.addTask {
-                    guard let parsed = parse(model), let ms = await firstTokenMs(model: model, apiKey: apiKey) else { return nil }
-                    return Result(model: model, version: parsed.version, grade: parsed.grade, firstTokenMs: ms,
+                    guard let ms = await firstTokenMs(model: model, apiKey: apiKey) else { return nil }
+                    let parsed = parse(model)
+                    return Result(model: model, version: parsed?.version ?? 0, grade: parsed?.grade ?? "", firstTokenMs: ms,
                                   listed: listedSet.contains(model))
                 }
             }
             for await result in group { if let result { results.append(result) } }
         }
+        // 千问按版本新到旧、max/plus/flash 排在前面，其他厂家按 others 的顺序排在后面
+        func rank(_ result: Result) -> (Double, Int) {
+            if let index = others.firstIndex(of: result.model) { return (-1, index) }
+            return (result.version, grades.firstIndex(of: result.grade) ?? 0)
+        }
         return results.sorted {
-            $0.version != $1.version ? $0.version > $1.version
-                : grades.firstIndex(of: $0.grade)! < grades.firstIndex(of: $1.grade)!
+            let a = rank($0), b = rank($1)
+            return a.0 != b.0 ? a.0 > b.0 : a.1 < b.1
         }
     }
 }
