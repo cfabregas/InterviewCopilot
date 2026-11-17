@@ -5,13 +5,12 @@ import Foundation
 /// 文档：https://help.aliyun.com/zh/model-studio/websocket-for-paraformer-real-time-service
 final class AliyunASR: ASRProvider, DropSimulating {
     static let defaultEndpoint = "wss://dashscope.aliyuncs.com/api-ws/v1/inference"
-    static let endpointDefaultsKey = "aliyunEndpoint"
 
     let events: AsyncStream<ASREvent>
     private let eventContinuation: AsyncStream<ASREvent>.Continuation
 
     private let apiKey: String
-    private let endpoint: String
+    private let endpoint = AliyunASR.defaultEndpoint
     private let taskID = UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
     private let queue = DispatchQueue(label: "copilot.asr.aliyun", qos: .userInteractive)
     private let downsampler = PCM16Downsampler()
@@ -24,9 +23,6 @@ final class AliyunASR: ASRProvider, DropSimulating {
 
     init(apiKey: String) {
         self.apiKey = apiKey
-        let custom = UserDefaults.standard.string(forKey: Self.endpointDefaultsKey)?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        endpoint = custom.isEmpty ? Self.defaultEndpoint : custom
         (events, eventContinuation) = AsyncStream<ASREvent>.makeStream()
     }
 

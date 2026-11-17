@@ -2,7 +2,7 @@ import AVFoundation
 import SwiftUI
 import Translation
 
-/// 设置页：线路与密钥、悬浮窗、快捷键、权限自检
+/// 设置页：大模型(线路、密钥、模型)、悬浮窗、快捷键、权限自检
 struct SettingsView: View {
     @ObservedObject var controller: SessionController
     @ObservedObject var settings: OverlaySettings
@@ -11,11 +11,11 @@ struct SettingsView: View {
     @ObservedObject var checkup: Checkup
     @AppStorage("settingsTab") private var tab = "lines"
 
-    private let tabs = [("lines", L("线路与密钥")), ("overlay", L("悬浮窗")), ("hotkeys", L("快捷键")), ("checkup", L("权限自检"))]
+    private let tabs = [("lines", L("大模型")), ("overlay", L("悬浮窗")), ("hotkeys", L("快捷键")), ("checkup", L("权限自检"))]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            PageHeader(title: L("设置"), subtitle: L("线路、密钥、悬浮窗、快捷键和权限")) {
+            PageHeader(title: L("设置"), subtitle: L("大模型、悬浮窗、快捷键和权限")) {
                 Picker("", selection: $tab) {
                     ForEach(tabs, id: \.0) { Text($0.1).tag($0.0) }
                 }
@@ -58,18 +58,39 @@ private struct KeyRow: View {
     let title: String
     let account: String
     @State private var input = ""
+
+    /// 各家申请和管理密钥的官网页面
+    private static let sites: [String: String] = [
+        "asr.aliyun": "https://bailian.console.aliyun.com/?tab=model#/api-key",
+        "asr.deepgram": "https://console.deepgram.com/",
+        "asr.assemblyai": "https://www.assemblyai.com/dashboard/api-keys",
+        "llm.claude": "https://console.anthropic.com/settings/keys",
+    ]
     @State private var saved = false
 
     var body: some View {
         // 不用 LabeledContent：标签长一点时它会把输入框挤到下一行
         HStack(spacing: 8) {
-            Text(title).fixedSize().padding(.trailing, 4)
+            Text(title).fixedSize()
+            if let site = Self.sites[account], let url = URL(string: site) {
+                Link(destination: url) {
+                    HStack(spacing: 2) {
+                        Text(L("官网"))
+                        Image(systemName: "arrow.up.right").font(.system(size: 9, weight: .semibold))
+                    }
+                    .font(.system(size: 11))
+                }
+                .foregroundStyle(Theme.accent)
+                .help(L("打开官网申请或管理密钥"))
+                .fixedSize()
+            }
+            Spacer(minLength: 4)
             HStack(spacing: 8) {
-                SecureField("", text: $input, prompt: Text(saved ? L("已保存，重新输入可替换") : L("粘贴 API Key")))
+                SecureField("", text: $input, prompt: Text(saved ? L("已保存，粘贴可替换") : L("粘贴 API Key")))
                     .labelsHidden()
                     .textFieldStyle(.roundedBorder)
                     .multilineTextAlignment(.leading)
-                    .frame(minWidth: 120, maxWidth: .infinity)
+                    .frame(minWidth: 90, maxWidth: .infinity)
                 Button(input.isEmpty && saved ? L("清除") : L("保存")) {
                     saved = KeyStore.set(input, for: account) && !input.isEmpty
                     input = ""
@@ -95,7 +116,6 @@ private struct LinesSettings: View {
     @AppStorage(LLMModels.key(.qwen, .strong)) private var qwenStrong = ""
     @AppStorage(LLMModels.key(.claude, .fast)) private var claudeFast = ""
     @AppStorage(LLMModels.key(.claude, .strong)) private var claudeStrong = ""
-    @AppStorage(AliyunASR.endpointDefaultsKey) private var aliyunEndpoint = ""
     @AppStorage("autoPostProcess") private var autoPost = true
     @State private var showingModelCheck = false
 
@@ -128,9 +148,6 @@ private struct LinesSettings: View {
                 }
                 if controller.line == .local {
                     Text(L("本地线路在本机离线转写，不需要密钥。")).font(.caption).foregroundStyle(.secondary)
-                }
-                if asrKeyLines.contains(.aliyun) {
-                    TextField(L("阿里云接入地址"), text: $aliyunEndpoint, prompt: Text(AliyunASR.defaultEndpoint))
                 }
                 Toggle(L("录制麦克风(会后处理用)"), isOn: $controller.recordMic)
             } header: {
