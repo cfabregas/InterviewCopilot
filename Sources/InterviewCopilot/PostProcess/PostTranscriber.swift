@@ -119,9 +119,89 @@ enum PostTranscriber {
         return [Piece(speaker: nil, startMs: int(words.first?["start"]), endMs: int(words.last?["end"]), text: text)]
     }
 
-    // MARK: - 本地：系统自带的 SpeechAnalyzer，离线，分不出说话人
+    // MARK: - 本地：系统自带的语音识别，离线，分不出说话人
 
     static func local(file: URL, locale: Locale, terms: [String]) async throws -> [Piece] {
+        if #available(macOS 26, *), !LocalASR.forceLegacy { return try await analyzerLocal(file: file, locale: locale, terms: terms) }
+        return try await legacyLocal(file: file, locale: locale, terms: terms)
+    }
+
+    /// macOS 26 以前：SFSpeechRecognizer。一次请求只适合一小段，所以把录音切成 50 秒一段逐段识别
+    private static func legacyLocal(file: URL, locale: Locale, terms: [String]) async throws -> [Piece] {
+        let status = await withCheckedContinuation { done in
+            SFSpeechRecognizer.requestAuthorization { done.resume(returning: $0) }
+        }
+        guard status == .authorized else { throw AppError("没有语音识别权限") }
+        guard let recognizer = SFSpeechRecognizer(locale: locale), recognizer.isAvailable else {
+            throw AppError("本地转写不支持语言 \(locale.identifier)")
+        }
+        let audio = try AVAudioFile(forReading: file)
+        let format = audio.processingFormat
+        let chunkFrames = AVAudioFrameCount(format.sampleRate * 50)
+        var pieces: [Piece] = []
+        while audio.framePosition < audio.length {
+            let offsetMs = Int(Double(audio.framePosition) / format.sampleRate * 1000)
+            guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: chunkFrames) else { break }
+            try audio.read(into: buffer, frameCount: chunkFrames)
+            if buffer.frameLength == 0 { break }
+
+            let request = SFSpeechAudioBufferRecognitionRequest()
+            request.requiresOnDeviceRecognition = recognizer.supportsOnDeviceRecognition
+            request.addsPunctuation = true
+            // 开着中间结果：本机识别遇到较长停顿会另起一段，最终结果里只剩最后一段，
+            // 所以发现新结果的开头比上一个结果晚，就把上一个结果先存下来
+            request.shouldReportPartialResults = true
+            request.contextualStrings = Array(terms.prefix(100))
+            request.append(buffer)
+            request.endAudio()
+            let segments: [SFTranscriptionSegment] = await withCheckedContinuation { done in
+                var finished = false
+                var kept: [SFTranscriptionSegment] = []
+                var latest: [SFTranscriptionSegment] = []
+                recognizer.recognitionTask(with: request) { result, error in
+                    guard !finished else { return }
+                    if let result {
+                        let now = result.bestTranscription.segments
+                        if let first = now.first, let previous = latest.first, first.timestamp > previous.timestamp + 0.5 {
+                            kept += latest
+                        }
+                        latest = now
+                        if result.isFinal {
+                            finished = true
+                            done.resume(returning: kept + latest)
+                        }
+                    } else if error != nil {
+                        finished = true
+                        done.resume(returning: kept + latest)   // 这一段没人说话也会报错
+                    }
+                }
+            }
+            // 词与词之间停顿超过 0.8 秒就断句
+            var current: [SFTranscriptionSegment] = []
+            func flush() {
+                guard let first = current.first, let last = current.last else { return }
+                let joiner = locale.language.languageCode?.identifier == "zh" ? "" : " "
+                pieces.append(Piece(speaker: nil, startMs: offsetMs + Int(first.timestamp * 1000),
+                                    endMs: offsetMs + Int((last.timestamp + last.duration) * 1000),
+                                    text: current.map(\.substring).reduce("") { text, word in
+                                        // 标点前面不加空格
+                                        guard !text.isEmpty, let head = word.unicodeScalars.first,
+                                              !CharacterSet.punctuationCharacters.contains(head) else { return text + word }
+                                        return text + joiner + word
+                                    }))
+                current = []
+            }
+            for segment in segments {
+                if let last = current.last, segment.timestamp - (last.timestamp + last.duration) > 0.8 { flush() }
+                current.append(segment)
+            }
+            flush()
+        }
+        return merge(pieces, joiner: locale.language.languageCode?.identifier == "zh" ? "" : " ")
+    }
+
+    @available(macOS 26, *)
+    private static func analyzerLocal(file: URL, locale: Locale, terms: [String]) async throws -> [Piece] {
         guard let supported = await SpeechTranscriber.supportedLocale(equivalentTo: locale) else {
             throw AppError("本地转写不支持语言 \(locale.identifier)")
         }

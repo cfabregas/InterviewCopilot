@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "InterviewCopilot",
-    platforms: [.macOS("27.0")],
+    platforms: [.macOS("14.2")],
     targets: [
         .executableTarget(
             name: "InterviewCopilot",

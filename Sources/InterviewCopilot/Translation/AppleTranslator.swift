@@ -1,7 +1,8 @@
 import Foundation
 import Translation
 
-/// 本地线路的翻译：系统 Translation 框架，完全离线。
+/// 本地线路的翻译：系统 Translation 框架，完全离线。需要 macOS 26，更早的系统改用 LLMTranslator。
+@available(macOS 26, *)
 actor AppleTranslator: TranslationProvider {
     enum Readiness {
         case ready

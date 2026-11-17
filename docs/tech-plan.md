@@ -1,6 +1,6 @@
 # 面试辅助工具 · 功能实现技术方案
 
-> 平台：macOS 14.4+，原生 Swift(SwiftUI + AppKit)
+> 平台：macOS 14.2+，Apple 芯片和 Intel 通用二进制，原生 Swift(SwiftUI + AppKit)。macOS 27 以前本地转写用 SFSpeechRecognizer，macOS 26 以前翻译改用大模型
 > 版本：v0.4(2026-11-15)，使用方式确定为仅自用
 > 定位：个人自用工具，不对外分发，不做后端服务
 

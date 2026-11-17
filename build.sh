@@ -3,8 +3,10 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-swift build -c release
-BIN="$(swift build -c release --show-bin-path)/InterviewCopilot"
+# 通用二进制：同时包含 Apple 芯片(arm64)和 Intel(x86_64)，两种 Mac 都能直接运行
+ARCHS=(--arch arm64 --arch x86_64)
+swift build -c release "${ARCHS[@]}"
+BIN="$(swift build -c release "${ARCHS[@]}" --show-bin-path)/InterviewCopilot"
 APP="build/InterviewCopilot.app"
 
 rm -rf "$APP"
@@ -38,7 +40,7 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>0.1</string>
     <key>CFBundleVersion</key><string>1</string>
-    <key>LSMinimumSystemVersion</key><string>27.0</string>
+    <key>LSMinimumSystemVersion</key><string>14.2</string>
     <key>NSHighResolutionCapable</key><true/>
     <key>NSAudioCaptureUsageDescription</key><string>采集会议中对方的声音，用于实时转写和翻译。</string>
     <key>NSMicrophoneUsageDescription</key><string>录制你自己的发言，用于会后复盘。</string>

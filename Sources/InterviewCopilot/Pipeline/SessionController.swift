@@ -94,18 +94,25 @@ final class SessionController: ObservableObject {
             if store == nil { store = Store.shared }
 
             // 翻译：语言包没装时仍然可以只转写
-            let appleTranslator = AppleTranslator(source: mode.sourceLanguage, target: mode.targetLanguage)
-            switch await appleTranslator.prepare() {
-            case .ready:
-                translator = appleTranslator
+            if #available(macOS 26, *), !LocalASR.forceLegacy {
+                let appleTranslator = AppleTranslator(source: mode.sourceLanguage, target: mode.targetLanguage)
+                switch await appleTranslator.prepare() {
+                case .ready:
+                    translator = appleTranslator
+                    translationNeedsDownload = false
+                case .needsDownload:
+                    translator = nil
+                    translationNeedsDownload = true
+                    Log.write("翻译语言包未安装，本次只转写。请在主窗口点\"下载翻译语言包\"。")
+                case .unsupported:
+                    translator = nil
+                    Log.write("系统不支持该语言对的本地翻译，本次只转写。")
+                }
+            } else {
+                // 系统翻译要 macOS 26：更早的系统用大模型翻译
+                translator = LLMTranslator.make(mode: mode)
                 translationNeedsDownload = false
-            case .needsDownload:
-                translator = nil
-                translationNeedsDownload = true
-                Log.write("翻译语言包未安装，本次只转写。请在主窗口点\"下载翻译语言包\"。")
-            case .unsupported:
-                translator = nil
-                Log.write("系统不支持该语言对的本地翻译，本次只转写。")
+                Log.write(translator == nil ? "系统版本低于 macOS 26 且没有大模型密钥，本次只转写。" : "系统版本低于 macOS 26，用大模型翻译。")
             }
 
             status = line == .local ? L("正在加载转写模型(首次可能要一分钟)…") : L("正在连接云端转写…")
@@ -240,7 +247,7 @@ final class SessionController: ObservableObject {
     private func makeASR() async throws -> ASRProvider {
         let terms = Terms.load()
         if !terms.isEmpty { Log.write("热词 \(terms.count) 个：\(terms.prefix(8).joined(separator: "、"))\(terms.count > 8 ? "…" : "")") }
-        let makeLocal: () -> ASRProvider = { AppleSpeechASR(terms: terms) }
+        let makeLocal: () -> ASRProvider = { LocalASR.make(terms: terms) }
 
         var chosen = line
         var started: ASRProvider?

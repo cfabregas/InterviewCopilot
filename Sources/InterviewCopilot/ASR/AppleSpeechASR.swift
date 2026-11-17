@@ -2,7 +2,19 @@ import AVFoundation
 import CoreMedia
 import Speech
 
+/// 本地转写：macOS 27 起用 SpeechAnalyzer，更早的系统用老的 SFSpeechRecognizer
+enum LocalASR {
+    /// 启动参数 --force-legacy：在新系统上也走老系统的兼容路径，用来自测
+    static let forceLegacy = CommandLine.arguments.contains("--force-legacy")
+
+    static func make(terms: [String]) -> ASRProvider {
+        if #available(macOS 27, *), !forceLegacy { return AppleSpeechASR(terms: terms) }
+        return LegacySpeechASR(terms: terms)
+    }
+}
+
 /// 本地线路的流式转写：系统自带的 SpeechAnalyzer，完全离线。
+@available(macOS 27, *)
 final class AppleSpeechASR: ASRProvider {
     /// 转写引擎的几种配置，用来对比延迟。启动参数 --asr=<名字> 可切换。
     enum Variant: String {

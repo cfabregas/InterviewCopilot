@@ -358,7 +358,7 @@ final class MockInterview: ObservableObject {
 
     private func makeASR() -> ASRProvider {
         let terms = Terms.load()
-        let makeLocal: () -> ASRProvider = { AppleSpeechASR(terms: terms) }
+        let makeLocal: () -> ASRProvider = { LocalASR.make(terms: terms) }
         // 主窗口选了具体的云端线路就用它；选"自动"时中文优先阿里云，英文优先海外线路
         var order: [ASRLine] = config.chinese ? [.aliyun, .assemblyai, .deepgram] : [.deepgram, .assemblyai, .aliyun]
         let chosen = asrLine()

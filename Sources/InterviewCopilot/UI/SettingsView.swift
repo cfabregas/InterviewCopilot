@@ -340,6 +340,12 @@ final class Checkup: ObservableObject {
         } else {
             keys = .ok(L("已填：") + filled.joined(separator: "、"))
         }
+        guard #available(macOS 26, *) else {
+            translation = KeyStore.has(LLMLine.saved.keyAccount)
+                ? .ok(L("系统低于 macOS 26，用大模型翻译"))
+                : .failed(L("系统低于 macOS 26，需要大模型密钥才能翻译"))
+            return
+        }
         Task {
             var parts: [String] = []
             var missing = false

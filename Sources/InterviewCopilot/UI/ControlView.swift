@@ -24,7 +24,8 @@ struct ListenPage: View {
 
     /// 日志区域是否展开(记住上次的选择)
     @AppStorage("showLog") private var showLog = false
-    @State private var downloadConfig: TranslationSession.Configuration?
+    /// 点"下载"时加一，触发系统的翻译语言包下载
+    @State private var downloadRequest = 0
     /// 热词表：提高专有名词的转写准确率，下次开始面试时生效
     @AppStorage(Terms.defaultsKey) private var terms = ""
     @AppStorage(LLMModels.key(.qwen, .strong)) private var qwenStrong = ""
@@ -51,15 +52,9 @@ struct ListenPage: View {
             checkup.refresh()
             if CommandLine.arguments.contains("--show-log") { showLog = true }
         }
-        .translationTask(downloadConfig) { session in
-            do {
-                try await session.prepareTranslation()
-                controller.translationNeedsDownload = false
-                Log.write("翻译语言包已就绪，下次开始面试时生效")
-            } catch {
-                Log.write("翻译语言包下载未完成：\(error)")
-            }
-        }
+        .modifier(TranslationDownload(request: downloadRequest, mode: controller.mode) {
+            controller.translationNeedsDownload = false
+        })
     }
 
     // MARK: 台口
@@ -161,8 +156,7 @@ struct ListenPage: View {
             if controller.translationNeedsDownload {
                 row(L("翻译语言包"), L("还没有安装，现在只能转写"), good: false) {
                     Button(L("下载")) {
-                        downloadConfig = TranslationSession.Configuration(source: controller.mode.sourceLanguage,
-                                                                          target: controller.mode.targetLanguage)
+                        downloadRequest += 1
                     }
                     .buttonStyle(LinkButtonStyle())
                 }
@@ -248,5 +242,44 @@ struct ListenPage: View {
             }
         }
         .background(Theme.surface.opacity(0.6))
+    }
+}
+
+/// 下载系统翻译语言包(macOS 26 起才用系统翻译；更早的系统用大模型翻译，不需要下载)
+private struct TranslationDownload: ViewModifier {
+    let request: Int
+    let mode: LanguageMode
+    let done: () -> Void
+
+    func body(content: Content) -> some View {
+        if #available(macOS 26, *) {
+            content.modifier(Downloader(request: request, mode: mode, done: done))
+        } else {
+            content
+        }
+    }
+
+    @available(macOS 26, *)
+    private struct Downloader: ViewModifier {
+        let request: Int
+        let mode: LanguageMode
+        let done: () -> Void
+        @State private var config: TranslationSession.Configuration?
+
+        func body(content: Content) -> some View {
+            content
+                .onChange(of: request) {
+                    config = TranslationSession.Configuration(source: mode.sourceLanguage, target: mode.targetLanguage)
+                }
+                .translationTask(config) { session in
+                    do {
+                        try await session.prepareTranslation()
+                        done()
+                        Log.write("翻译语言包已就绪，下次开始面试时生效")
+                    } catch {
+                        Log.write("翻译语言包下载未完成：\(error)")
+                    }
+                }
+        }
     }
 }
