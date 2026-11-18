@@ -25,15 +25,13 @@ struct MockInterviewView: View {
     // MARK: - 开始前
 
     private func field(_ title: String, @ViewBuilder control: () -> some View) -> some View {
-        VStack(spacing: 0) {
+        GroupedRow {
             HStack {
                 Text(title).font(.system(size: 13)).foregroundStyle(Theme.muted).lineLimit(1)
                     .frame(width: L10n.shared.isSource ? 84 : 170, alignment: .leading)
                 control()
                 Spacer()
             }
-            .padding(.vertical, 9)
-            Rectangle().fill(Theme.line.opacity(0.6)).frame(height: 1)
         }
     }
 
@@ -42,16 +40,16 @@ struct MockInterviewView: View {
             VStack(alignment: .leading, spacing: 14) {
                 Text(L("坐下来，像真的一样答一遍。"))
                     .font(Theme.script(24))
-                    .foregroundStyle(Theme.onCurtain)
+                    .foregroundStyle(Theme.ink)
                 Text(resumeLine + L("。") + (resume.jd.isEmpty ? L("还没有填岗位描述，填了题目会更贴近岗位。") : L("岗位描述已填写 %@ 字。", "\(resume.jd.count)")))
                     .font(.system(size: 13))
-                    .foregroundStyle(Theme.onCurtainMuted)
+                    .foregroundStyle(Theme.muted)
                 HStack(spacing: 14) {
                     Button(L("开始模拟面试")) { mock.start() }
                         .buttonStyle(PrimaryButtonStyle(large: true))
                         .keyboardShortcut(.defaultAction)
                     Button(L("管理简历和岗位描述")) { navigator.page = .resume }
-                        .buttonStyle(QuietButtonStyle(onCurtain: true))
+                        .buttonStyle(QuietButtonStyle())
                     if !mock.status.isEmpty {
                         Text(mock.status).font(.system(size: 13)).foregroundStyle(Theme.cue)
                     }
@@ -62,7 +60,8 @@ struct MockInterviewView: View {
             .stage(padding: 24)
 
             VStack(alignment: .leading, spacing: 0) {
-                SectionRule(title: L("这一场怎么面")).padding(.bottom, 4)
+                SectionRule(title: L("这一场怎么面")).padding(.bottom, 8)
+                VStack(spacing: 0) {
                 field(L("面试语言")) {
                     Picker("", selection: $mock.config.chinese) {
                         Text(L("英文")).tag(false)
@@ -86,6 +85,8 @@ struct MockInterviewView: View {
                 field(L("点评之后")) {
                     Toggle(L("暂停，等我点\"继续\"再问下一个"), isOn: $mock.config.pauseAfterFeedback)
                 }
+                }
+                .groupedRows()
             }
             Text(L("建议戴耳机：外放时麦克风会录到面试官的声音。"))
                 .font(.system(size: 12)).foregroundStyle(Theme.muted)
@@ -118,18 +119,18 @@ struct MockInterviewView: View {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(spacing: 10) {
                     TallyLamp(on: mock.phase == .answering)
-                    Text(mock.status).font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.onCurtain).lineLimit(1)
-                    if busy { ProgressView().controlSize(.small).colorScheme(.dark) }
+                    Text(mock.status).font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.ink).lineLimit(1)
+                    if busy { ProgressView().controlSize(.small) }
                     Spacer()
                     if let turn = current, mock.phase != .finished {
-                        Text(label(turn)).font(.system(size: 12)).foregroundStyle(Theme.onCurtainMuted)
+                        Text(label(turn)).font(.system(size: 12)).foregroundStyle(Theme.muted)
                     }
                 }
 
                 if let turn = current, mock.phase != .finished, mock.phase != .wrappingUp {
                     Text(turn.question)
                         .font(Theme.script(21))
-                        .foregroundStyle(Theme.onCurtain)
+                        .foregroundStyle(Theme.ink)
                         .lineSpacing(4)
                         .textSelection(.enabled)
                         .frame(maxWidth: 760, alignment: .leading)
@@ -138,14 +139,14 @@ struct MockInterviewView: View {
                         ScrollView {
                             Text(mock.liveAnswer.isEmpty ? L("正在听你回答…") : mock.liveAnswer)
                                 .font(.system(size: 13))
-                                .foregroundStyle(mock.liveAnswer.isEmpty ? Theme.onCurtainMuted : Theme.onCurtain.opacity(0.8))
+                                .foregroundStyle(mock.liveAnswer.isEmpty ? Theme.muted : Theme.ink.opacity(0.8))
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         .frame(height: 72)
                     }
                 } else if mock.phase == .finished {
                     Text(mock.reviewReady ? L("这一场结束了，复盘已经生成。") : L("这一场结束了。"))
-                        .font(Theme.script(21)).foregroundStyle(Theme.onCurtain)
+                        .font(Theme.script(21)).foregroundStyle(Theme.ink)
                 }
 
                 HStack(spacing: 10) {
@@ -153,10 +154,10 @@ struct MockInterviewView: View {
                     case .answering:
                         Button(L("答完了")) { mock.finishAnswer() }
                             .buttonStyle(PrimaryButtonStyle(large: true)).keyboardShortcut(.defaultAction)
-                        Button(L("重听问题")) { mock.repeatQuestion() }.buttonStyle(QuietButtonStyle(onCurtain: true))
-                        Button(L("跳过这题")) { mock.skip() }.buttonStyle(QuietButtonStyle(onCurtain: true))
+                        Button(L("重听问题")) { mock.repeatQuestion() }.buttonStyle(QuietButtonStyle())
+                        Button(L("跳过这题")) { mock.skip() }.buttonStyle(QuietButtonStyle())
                     case .asking:
-                        Button(L("跳过这题")) { mock.skip() }.buttonStyle(QuietButtonStyle(onCurtain: true))
+                        Button(L("跳过这题")) { mock.skip() }.buttonStyle(QuietButtonStyle())
                     case .waiting:
                         Button(L("继续")) { mock.proceed() }
                             .buttonStyle(PrimaryButtonStyle(large: true)).keyboardShortcut(.defaultAction)
@@ -165,7 +166,7 @@ struct MockInterviewView: View {
                             Button(L("打开复盘")) { openReview(mock.sessionID) }
                                 .buttonStyle(PrimaryButtonStyle(large: true)).keyboardShortcut(.defaultAction)
                         }
-                        Button(L("再来一场")) { mock.reset() }.buttonStyle(QuietButtonStyle(onCurtain: true))
+                        Button(L("再来一场")) { mock.reset() }.buttonStyle(QuietButtonStyle())
                     default:
                         EmptyView()
                     }

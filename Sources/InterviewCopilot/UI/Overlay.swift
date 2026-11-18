@@ -117,9 +117,9 @@ struct AnswerCardView: View {
             }
         }
         .fixedSize(horizontal: false, vertical: true)
-        .padding(.vertical, 10).padding(.horizontal, 12)
+        .padding(.vertical, 12).padding(.horizontal, 14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 10).fill(.white.opacity(0.07)))
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(.white.opacity(0.08)))
     }
 }
 
@@ -170,10 +170,22 @@ struct SubtitleOverlayView: View {
                 AnswerCardView(card: card, fontSize: settings.fontSize)
             }
         }
-        .padding(.horizontal, 18).padding(.vertical, 14)
+        .padding(.horizontal, 20).padding(.vertical, 16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-        .background(RoundedRectangle(cornerRadius: 14).fill(Color(red: 0.06, green: 0.08, blue: 0.11).opacity(settings.opacity)))
-        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(.white.opacity(settings.opacity > 0.05 ? 0.1 : 0)))
-        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .modifier(OverlayBackground(opacity: settings.opacity))
     }
 }
+
+/// 悬浮窗的底：深色半透明。不加玻璃，玻璃会把后面的会议画面糊掉
+private struct OverlayBackground: ViewModifier {
+    let opacity: Double
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 22, style: .continuous)
+        content
+            .background(shape.fill(Color(red: 0.06, green: 0.08, blue: 0.11).opacity(opacity)))
+            .overlay(shape.strokeBorder(.white.opacity(opacity > 0.05 ? 0.1 : 0)))
+            .clipShape(shape)
+    }
+}
+

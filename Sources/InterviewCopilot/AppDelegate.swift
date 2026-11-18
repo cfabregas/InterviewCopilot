@@ -43,9 +43,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window.titleVisibility = .hidden
         window.isMovableByWindowBackground = true
         window.minSize = NSSize(width: 1040, height: 680)
-        window.contentView = NSHostingView(rootView: MainView(navigator: navigator, controller: controller, settings: settings,
-                                                              log: logStore, answers: answers, resume: resume, checkup: checkup,
-                                                              post: post, reviewModel: reviewModel, mock: mock))
+        window.contentViewController = NSHostingController(rootView: MainView(navigator: navigator, controller: controller, settings: settings,
+                                                                              log: logStore, answers: answers, resume: resume, checkup: checkup,
+                                                                              post: post, reviewModel: reviewModel, mock: mock))
         window.setFrameAutosaveName("MainWindow")
         window.center()
         window.isReleasedWhenClosed = false

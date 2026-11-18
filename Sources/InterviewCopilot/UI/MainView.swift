@@ -37,7 +37,7 @@ final class Navigator: ObservableObject {
     @Published var runningSince: Date?
 }
 
-/// 主窗口：左边幕布色的侧栏，右边是页面
+/// 主窗口：系统原生的侧栏(macOS 26 起是浮在内容上的玻璃)，右边是页面
 struct MainView: View {
     @ObservedObject var navigator: Navigator
     @ObservedObject var controller: SessionController
@@ -52,8 +52,11 @@ struct MainView: View {
     @ObservedObject private var l10n = L10n.shared
 
     var body: some View {
-        HStack(spacing: 0) {
+        NavigationSplitView {
             sidebar
+                .navigationSplitViewColumnWidth(L10n.shared.isSource ? 200 : 220)
+                .toolbar(removing: .sidebarToggle)
+        } detail: {
             Group {
                 switch navigator.page {
                 case .listen:
@@ -72,53 +75,95 @@ struct MainView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .background(Theme.paper)
+            .background(Backdrop())
+            // 只让内容顶到标题栏，左边要给浮起来的侧栏让位
+            .ignoresSafeArea(.container, edges: [.top, .bottom])
         }
+        .navigationSplitViewStyle(.balanced)
         .tint(Theme.accent)
+        .onChange(of: navigator.page) {
+            if navigator.page == .review { reviewModel.reload() }
+            if navigator.page == .settings { checkup.refresh() }
+        }
         // 换语言后整个界面重建一遍
         .id(l10n.code)
         .frame(minWidth: 1040, minHeight: 680)
-        .ignoresSafeArea()
+    }
+
+    private var selection: Binding<Page?> {
+        Binding(get: { navigator.page }, set: { if let page = $0 { navigator.page = page } })
     }
 
     private var sidebar: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            // 给窗口左上角的三个按钮让出位置
-            Color.clear.frame(height: 46)
-            Text(L("千人千面"))
-                .font(Theme.display(20))
-                .foregroundStyle(Theme.onCurtain)
-                .padding(.horizontal, 18)
-                .padding(.bottom, 18)
-
-            ForEach([Page.listen, .mock, .review, .resume]) { item($0) }
-            Spacer()
-
-            if !checkup.problems.isEmpty {
-                Button {
-                    UserDefaults.standard.set("checkup", forKey: "settingsTab")
-                    navigator.page = .settings
-                } label: {
-                    HStack(alignment: .top, spacing: 8) {
-                        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Theme.cue)
-                        Text(L("有 %@ 项需要处理", "\(checkup.problems.count)")).foregroundStyle(Theme.onCurtain)
-                    }
-                    .font(.system(size: 12))
-                    .padding(10)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.07)))
+        List(selection: selection) {
+            Section {
+                ForEach([Page.listen, .mock, .review, .resume]) { row($0) }
+            } header: {
+                HStack(spacing: 8) {
+                    Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 22, height: 22)
+                    Text(L("千人千面")).font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.ink)
                 }
-                .buttonStyle(.plain)
-                .padding(.horizontal, 10)
-                .padding(.bottom, 6)
+                .padding(.bottom, 8)
             }
-            languageMenu
-            item(.settings)
-            Color.clear.frame(height: 12)
+            .collapsible(false)
         }
-        .frame(width: L10n.shared.isSource ? 196 : 216)
-        .frame(maxHeight: .infinity)
-        .background(Theme.curtain)
+        .listStyle(.sidebar)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            VStack(alignment: .leading, spacing: 2) {
+                if !checkup.problems.isEmpty {
+                    Button {
+                        UserDefaults.standard.set("checkup", forKey: "settingsTab")
+                        navigator.page = .settings
+                    } label: {
+                        HStack(alignment: .top, spacing: 8) {
+                            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Theme.cue)
+                            Text(L("有 %@ 项需要处理", "\(checkup.problems.count)")).foregroundStyle(Theme.ink)
+                        }
+                        .font(.system(size: 12))
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Theme.cue.opacity(0.14)))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.bottom, 6)
+                }
+                languageMenu
+                settingsButton
+            }
+            .padding(.horizontal, 10)
+            .padding(.bottom, 12)
+        }
+    }
+
+    private func row(_ page: Page) -> some View {
+        HStack(spacing: 0) {
+            Label(page.title, systemImage: page.symbol).lineLimit(1)
+            Spacer()
+            if page == .review, post.running != nil {
+                ProgressView().controlSize(.mini)
+            } else if isLive(page) {
+                TallyLamp(on: true, size: 7)
+            }
+        }
+        .tag(page)
+    }
+
+    /// 设置放在侧栏底部，选中时和上面的列表一样高亮
+    private var settingsButton: some View {
+        let selected = navigator.page == .settings
+        return Button {
+            navigator.page = .settings
+        } label: {
+            Label(Page.settings.title, systemImage: Page.settings.symbol)
+                .font(.system(size: 13))
+                .foregroundStyle(selected ? Theme.accent : Theme.ink)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(selected ? Theme.accent.opacity(0.14) : .clear))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     /// 界面语言：选项来自语言文件，加一个文件就多一项
@@ -131,56 +176,29 @@ struct MainView: View {
             .pickerStyle(.inline)
             .labelsHidden()
         } label: {
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
                 Image(systemName: "globe").frame(width: 18)
                 Text(l10n.choice.isEmpty ? L("跟随系统") : (l10n.languages.first { $0.code == l10n.choice }?.name ?? l10n.choice))
                     .lineLimit(1)
-                Spacer()
+                    .fixedSize()
+                Spacer(minLength: 8)
                 Image(systemName: "chevron.up.chevron.down").font(.system(size: 9, weight: .semibold))
             }
             .font(.system(size: 13))
-            .foregroundStyle(Theme.onCurtainMuted)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
+            .foregroundStyle(Theme.muted)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
             .contentShape(Rectangle())
         }
         .menuStyle(.button)
         .buttonStyle(.plain)
         .menuIndicator(.hidden)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .help(L("界面语言"))
-        .padding(.horizontal, 8)
     }
 
     private func isLive(_ page: Page) -> Bool {
         (page == .listen && controller.isRunning) || (page == .mock && mock.isActive)
             || (page == .review && post.running != nil)
-    }
-
-    private func item(_ page: Page) -> some View {
-        let selected = navigator.page == page
-        return Button {
-            navigator.page = page
-            if page == .review { reviewModel.reload() }
-            if page == .settings { checkup.refresh() }
-        } label: {
-            HStack(spacing: 10) {
-                Image(systemName: page.symbol).frame(width: 18)
-                Text(page.title).lineLimit(1)
-                Spacer()
-                if page == .review, post.running != nil {
-                    ProgressView().controlSize(.mini).colorScheme(.dark)
-                } else if isLive(page) {
-                    TallyLamp(on: true, size: 7)
-                }
-            }
-            .font(.system(size: 13, weight: selected ? .semibold : .regular))
-            .foregroundStyle(selected ? Theme.onCurtain : Theme.onCurtainMuted)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-            .background(RoundedRectangle(cornerRadius: 7).fill(selected ? Theme.curtainRaised : .clear))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .padding(.horizontal, 8)
     }
 }

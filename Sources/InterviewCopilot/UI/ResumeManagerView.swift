@@ -50,7 +50,7 @@ struct ResumeManagerView: View {
                                 .font(.system(size: 13))
                                 .scrollContentBackground(.hidden)
                                 .frame(height: 140)
-                                .surface(radius: 8, padding: 8)
+                                .surface(radius: 12, padding: 10)
                         }
                         .frame(maxWidth: .infinity, alignment: .topLeading)
                     }
@@ -149,8 +149,7 @@ struct TermChips: View {
                             .help(L("删除这个热词"))
                         }
                         .padding(.horizontal, 9).padding(.vertical, 4)
-                        .background(RoundedRectangle(cornerRadius: 6).fill(Theme.surface))
-                        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.line))
+                        .background(Capsule().fill(Theme.surface))
                     }
                 }
             }

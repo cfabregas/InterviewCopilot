@@ -12,6 +12,10 @@ APP="build/InterviewCopilot.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS"
 cp "$BIN" "$APP/Contents/MacOS/InterviewCopilot"
+# SwiftPM 把程序记录的 SDK 版本写成了最低系统版本(14.2)，系统会因此按旧版外观显示，
+# 用不上 macOS 26 起的玻璃效果。这里改成实际编译用的 SDK 版本。
+vtool -set-build-version macos 14.2 "$(xcrun --show-sdk-version)" -replace \
+    -output "$APP/Contents/MacOS/InterviewCopilot" "$APP/Contents/MacOS/InterviewCopilot"
 
 # 界面语言文件：每种语言一个 JSON，加语言只需要往 Localizations 目录放一个文件
 mkdir -p "$APP/Contents/Resources/Localizations"

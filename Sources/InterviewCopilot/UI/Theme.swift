@@ -1,7 +1,8 @@
 import AppKit
 import SwiftUI
 
-/// 全应用的视觉语言。取自同传间和提词器：深色的"幕布"侧栏，冷调的纸面，
+/// 全应用的视觉语言：轻、亮、通透。系统字体，浅色的底，主要面板和按钮用系统的玻璃材质
+/// (macOS 26 起是 Liquid Glass，更早的系统退回毛玻璃)。
 /// 红色只用于"正在进行"，黄色只用于提示给我的答案。
 enum Theme {
     private static func dynamic(_ light: UInt32, _ dark: UInt32) -> Color {
@@ -12,25 +13,20 @@ enum Theme {
         })
     }
 
-    /// 纸面：内容区的底色
-    static let paper = dynamic(0xF3F4F7, 0x12161D)
-    /// 纸面上抬起一层的面：输入区、列表
-    static let surface = dynamic(0xFFFFFF, 0x1A2029)
-    /// 墨色：正文
-    static let ink = dynamic(0x17202C, 0xE6EAF0)
+    /// 内容区的底色
+    static let paper = dynamic(0xF5F6F8, 0x1B1C1F)
+    /// 抬起一层的面：输入区、分组列表
+    static let surface = dynamic(0xFFFFFF, 0x26282C)
+    /// 正文
+    static let ink = dynamic(0x1D1D1F, 0xF2F2F5)
     /// 次要文字
-    static let muted = dynamic(0x667185, 0x8D97A8)
+    static let muted = dynamic(0x6E6E76, 0x98989F)
     /// 分隔线
-    static let line = dynamic(0xDCE0E7, 0x2A323E)
-    /// 幕布：侧栏和"台口"面板，两种外观下都是深色
-    static let curtain = dynamic(0x1A2432, 0x0B0F15)
-    static let curtainRaised = dynamic(0x263345, 0x171E28)
-    static let onCurtain = Color.white.opacity(0.9)
-    static let onCurtainMuted = Color.white.opacity(0.5)
-    /// 靛青：可以点的东西
-    static let accent = dynamic(0x2C4F86, 0x86ABE6)
+    static let line = dynamic(0xE4E5E9, 0x34363B)
+    /// 可以点的东西
+    static let accent = dynamic(0x3368D6, 0x7FA7F5)
     /// 实心按钮的底色：深色外观下也要压得住白字
-    static let accentFill = dynamic(0x2C4F86, 0x3D6DBE)
+    static let accentFill = dynamic(0x3368D6, 0x4A7BE0)
     /// 提示灯红：只表示"正在进行"
     static let live = dynamic(0xE0453A, 0xF0574C)
     /// 提词黄：给我看的答案和提示
@@ -38,43 +34,72 @@ enum Theme {
     static let good = dynamic(0x2B8C5E, 0x4DB583)
     static let warn = dynamic(0xB86A12, 0xE39A3B)
 
-    /// 标题用宋体：像一页台本
-    static func display(_ size: CGFloat) -> Font { .custom("STSongti-SC-Bold", size: size) }
-    static func script(_ size: CGFloat) -> Font { .custom("STSongti-SC-Regular", size: size) }
+    /// 标题
+    static func display(_ size: CGFloat) -> Font { .system(size: size, weight: .bold) }
+    /// 大段的字幕、问题
+    static func script(_ size: CGFloat) -> Font { .system(size: size, weight: .regular) }
 }
 
-/// 主要动作：实心按钮。live 为 true 时变成红色(结束正在进行的事)。
+/// 内容区背后很淡的两团光，让上面的玻璃面板有东西可以折射
+struct Backdrop: View {
+    var body: some View {
+        ZStack {
+            Theme.paper
+            GeometryReader { proxy in
+                let w = proxy.size.width
+                Circle().fill(Theme.accent.opacity(0.16)).frame(width: w * 0.6).blur(radius: 120)
+                    .position(x: w * 0.22, y: 40)
+                Circle().fill(Theme.cue.opacity(0.10)).frame(width: w * 0.45).blur(radius: 120)
+                    .position(x: w * 0.85, y: 120)
+            }
+        }
+        .ignoresSafeArea()
+    }
+}
+
+/// 主要动作：胶囊形的实心按钮(macOS 26 起是带颜色的玻璃)。live 为 true 时变成红色(结束正在进行的事)。
 struct PrimaryButtonStyle: ButtonStyle {
     var live = false
     var large = false
     @Environment(\.isEnabled) private var enabled
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: large ? 15 : 13, weight: .semibold))
+        let color = live ? Theme.live : Theme.accentFill
+        let label = configuration.label
+            .font(.system(size: large ? 14 : 13, weight: .semibold))
             .foregroundStyle(.white)
             .padding(.horizontal, large ? 22 : 14)
-            .padding(.vertical, large ? 10 : 6)
-            .background(RoundedRectangle(cornerRadius: large ? 9 : 7).fill(live ? Theme.live : Theme.accentFill))
-            .opacity(enabled ? (configuration.isPressed ? 0.8 : 1) : 0.4)
+            .padding(.vertical, large ? 9 : 5)
+        return Group {
+            if #available(macOS 26, *) {
+                label.glassEffect(.regular.tint(color).interactive(), in: Capsule())
+            } else {
+                label.background(Capsule().fill(color))
+            }
+        }
+        .opacity(enabled ? (configuration.isPressed ? 0.8 : 1) : 0.4)
     }
 }
 
-/// 次要动作：描边按钮
+/// 次要动作：胶囊形的玻璃按钮
 struct QuietButtonStyle: ButtonStyle {
-    var onCurtain = false
     @Environment(\.isEnabled) private var enabled
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
+        let label = configuration.label
             .font(.system(size: 13))
-            .foregroundStyle(onCurtain ? Theme.onCurtain : Theme.ink)
-            .padding(.horizontal, 12)
+            .foregroundStyle(Theme.ink)
+            .padding(.horizontal, 13)
             .padding(.vertical, 5)
-            .background(RoundedRectangle(cornerRadius: 7).fill(onCurtain ? Color.white.opacity(configuration.isPressed ? 0.16 : 0.08)
-                                                                            : Theme.surface.opacity(configuration.isPressed ? 0.6 : 1)))
-            .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(onCurtain ? Color.white.opacity(0.14) : Theme.line))
-            .opacity(enabled ? 1 : 0.45)
+        return Group {
+            if #available(macOS 26, *) {
+                label.glassEffect(.regular.interactive(), in: Capsule())
+            } else {
+                label.background(Capsule().fill(Theme.surface.opacity(configuration.isPressed ? 0.6 : 1)))
+                    .overlay(Capsule().strokeBorder(Theme.line))
+            }
+        }
+        .opacity(enabled ? (configuration.isPressed ? 0.75 : 1) : 0.45)
     }
 }
 
@@ -94,7 +119,7 @@ struct TallyLamp: View {
 
     var body: some View {
         Circle()
-            .fill(on ? Theme.live : Color.white.opacity(0.22))
+            .fill(on ? Theme.live : Theme.muted.opacity(0.35))
             .frame(width: size, height: size)
             .shadow(color: on ? Theme.live.opacity(0.8) : .clear, radius: on ? 5 : 0)
             .opacity(on && dim ? 0.45 : 1)
@@ -122,7 +147,7 @@ struct KeyCap: View {
     }
 }
 
-/// 页面顶部：宋体标题、一句说明、右侧放这一页的主要动作
+/// 页面顶部：标题、一句说明、右侧放这一页的主要动作
 struct PageHeader<Trailing: View>: View {
     let title: String
     let subtitle: String
@@ -130,7 +155,7 @@ struct PageHeader<Trailing: View>: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 14) {
-            Text(title).font(Theme.display(26)).foregroundStyle(Theme.ink)
+            Text(title).font(Theme.display(26)).foregroundStyle(Theme.ink).fixedSize()
             Text(subtitle).font(.system(size: 13)).foregroundStyle(Theme.muted).lineLimit(1)
             Spacer(minLength: 12)
             trailing()
@@ -147,28 +172,61 @@ extension PageHeader where Trailing == EmptyView {
     }
 }
 
-/// 小节标题：一行字加一条贯通的细线
+/// 小节标题
 struct SectionRule: View {
     let title: String
     var body: some View {
-        HStack(spacing: 10) {
-            Text(title).font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.muted)
-            Rectangle().fill(Theme.line).frame(height: 1)
+        Text(title).font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.ink.opacity(0.8))
+    }
+}
+
+/// 分组列表里的一行：上面一条缩进的分隔线。放进 groupedRows() 的容器后，第一行的分隔线会被裁掉
+struct GroupedRow<Content: View>: View {
+    let content: Content
+    init(@ViewBuilder content: () -> Content) { self.content = content() }
+    var body: some View {
+        VStack(spacing: 0) {
+            Rectangle().fill(Theme.line).frame(height: 1).padding(.leading, 14)
+            content.padding(.horizontal, 14).padding(.vertical, 9)
         }
     }
 }
 
 extension View {
-    /// 抬起一层的面：白底加细边
-    func surface(radius: CGFloat = 10, padding: CGFloat = 14) -> some View {
+    /// 抬起一层的面：白底，圆角，没有描边
+    func surface(radius: CGFloat = 12, padding: CGFloat = 14) -> some View {
         self.padding(padding)
-            .background(RoundedRectangle(cornerRadius: radius).fill(Theme.surface))
-            .overlay(RoundedRectangle(cornerRadius: radius).strokeBorder(Theme.line))
+            .background(RoundedRectangle(cornerRadius: radius, style: .continuous).fill(Theme.surface))
     }
 
-    /// 台口：深色面板，放这一页最要紧的东西
+    /// 分组列表的容器：像系统设置里的一组选项，里面放 GroupedRow
+    func groupedRows() -> some View {
+        self.padding(.top, -1)
+            .background(Theme.surface)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    /// 胶囊形的玻璃底：给菜单这类不能套按钮样式的控件用
+    @ViewBuilder
+    func capsuleGlass() -> some View {
+        if #available(macOS 26, *) {
+            self.glassEffect(.regular.interactive(), in: Capsule())
+        } else {
+            self.background(Capsule().fill(Theme.surface)).overlay(Capsule().strokeBorder(Theme.line))
+        }
+    }
+
+    /// 玻璃面板：放这一页最要紧的东西
+    @ViewBuilder
     func stage(padding: CGFloat = 20) -> some View {
-        self.padding(padding)
-            .background(RoundedRectangle(cornerRadius: 14).fill(Theme.curtain))
+        let shape = RoundedRectangle(cornerRadius: 22, style: .continuous)
+        if #available(macOS 26, *) {
+            self.padding(padding).glassEffect(.regular, in: shape)
+        } else {
+            self.padding(padding)
+                .background(.regularMaterial, in: shape)
+                .overlay(shape.strokeBorder(Color.white.opacity(0.4)))
+                .shadow(color: .black.opacity(0.06), radius: 18, y: 6)
+        }
     }
 }

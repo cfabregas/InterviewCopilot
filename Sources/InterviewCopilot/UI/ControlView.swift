@@ -12,7 +12,7 @@ final class LogStore: ObservableObject {
     }
 }
 
-/// 面试助手页：一块深色的"台口"放开始按钮、提示灯、计时和字幕预览，下面是准备情况、快捷键和运行日志
+/// 面试助手页：一块玻璃面板放开始按钮、提示灯、计时和字幕预览，下面是准备情况、快捷键和运行日志
 struct ListenPage: View {
     @ObservedObject var navigator: Navigator
     @ObservedObject var controller: SessionController
@@ -65,13 +65,13 @@ struct ListenPage: View {
                 TallyLamp(on: controller.isRunning)
                 Text(controller.isRunning ? controller.status : (controller.isBusy ? controller.status : L("待机")))
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Theme.onCurtain)
+                    .foregroundStyle(Theme.ink)
                     .lineLimit(1)
                 Spacer()
                 TimelineView(.periodic(from: .now, by: 1)) { context in
                     Text(Self.timecode(navigator.runningSince.map { context.date.timeIntervalSince($0) } ?? 0))
                         .font(.system(size: 22, weight: .light).monospacedDigit())
-                        .foregroundStyle(controller.isRunning ? Theme.onCurtain : Theme.onCurtainMuted)
+                        .foregroundStyle(controller.isRunning ? Theme.ink : Theme.muted)
                 }
             }
 
@@ -80,13 +80,13 @@ struct ListenPage: View {
                 if controller.lines.isEmpty {
                     Text(controller.isRunning ? L("正在听…") : L("开始后，对方说的话会出现在这里和悬浮窗里。"))
                         .font(Theme.script(19))
-                        .foregroundStyle(Theme.onCurtainMuted)
+                        .foregroundStyle(Theme.muted)
                 } else {
                     ForEach(controller.lines.suffix(2)) { line in
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(line.source).font(.system(size: 12)).foregroundStyle(Theme.onCurtainMuted).lineLimit(1)
+                            Text(line.source).font(.system(size: 12)).foregroundStyle(Theme.muted).lineLimit(1)
                             if !line.translation.isEmpty {
-                                Text(line.translation).font(Theme.script(19)).foregroundStyle(Theme.onCurtain).lineLimit(2)
+                                Text(line.translation).font(Theme.script(19)).foregroundStyle(Theme.ink).lineLimit(2)
                             }
                         }
                     }
@@ -94,7 +94,7 @@ struct ListenPage: View {
             }
             .frame(maxWidth: .infinity, minHeight: 84, alignment: .bottomLeading)
 
-            Rectangle().fill(Color.white.opacity(0.1)).frame(height: 1)
+            Rectangle().fill(Theme.line).frame(height: 1)
 
             HStack(spacing: 16) {
                 Picker("", selection: $controller.mode) {
@@ -108,7 +108,7 @@ struct ListenPage: View {
                 Toggle(L("实时答案"), isOn: $answers.enabled)
                     .toggleStyle(.switch)
                     .controlSize(.small)
-                    .foregroundStyle(Theme.onCurtain)
+                    .foregroundStyle(Theme.ink)
 
                 Spacer()
 
@@ -121,8 +121,6 @@ struct ListenPage: View {
                 .keyboardShortcut(.defaultAction)
                 .disabled(controller.isBusy)
             }
-            .colorScheme(.dark)
-            .tint(Theme.accentFill)
         }
         .stage(padding: 22)
     }
@@ -136,7 +134,8 @@ struct ListenPage: View {
 
     private var readiness: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SectionRule(title: L("准备情况")).padding(.bottom, 4)
+            SectionRule(title: L("准备情况")).padding(.bottom, 8)
+            VStack(spacing: 0) {
             row(L("转写线路"), controller.line.title, good: true) {
                 Button(L("更改")) { open("lines") }.buttonStyle(LinkButtonStyle())
             }
@@ -161,6 +160,8 @@ struct ListenPage: View {
                     .buttonStyle(LinkButtonStyle())
                 }
             }
+            }
+            .groupedRows()
         }
     }
 
@@ -171,7 +172,7 @@ struct ListenPage: View {
     }
 
     private func row(_ title: String, _ value: String, good: Bool, @ViewBuilder action: () -> some View) -> some View {
-        VStack(spacing: 0) {
+        GroupedRow {
             HStack(spacing: 12) {
                 Circle().fill(good ? Theme.good : Theme.warn).frame(width: 7, height: 7)
                 Text(title).font(.system(size: 13)).foregroundStyle(Theme.muted).lineLimit(1)
@@ -180,8 +181,6 @@ struct ListenPage: View {
                 Spacer()
                 action()
             }
-            .padding(.vertical, 9)
-            Rectangle().fill(Theme.line.opacity(0.6)).frame(height: 1)
         }
     }
 
@@ -207,7 +206,6 @@ struct ListenPage: View {
 
     private var logDrawer: some View {
         VStack(spacing: 0) {
-            Rectangle().fill(Theme.line).frame(height: 1)
             Button {
                 withAnimation(.easeOut(duration: 0.18)) { showLog.toggle() }
             } label: {
@@ -241,7 +239,7 @@ struct ListenPage: View {
                 .frame(height: 190)
             }
         }
-        .background(Theme.surface.opacity(0.6))
+        .background(.bar)
     }
 }
 

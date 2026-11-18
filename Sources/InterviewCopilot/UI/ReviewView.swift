@@ -137,7 +137,8 @@ struct ReviewView: View {
                     TextField(L("搜索全部面试"), text: $model.search).textFieldStyle(.plain)
                 }
                 .font(.system(size: 13))
-                .surface(radius: 7, padding: 7)
+                .padding(.horizontal, 10).padding(.vertical, 7)
+                .capsuleGlass()
                 .padding(.horizontal, 14)
                 .padding(.bottom, 8)
 
@@ -149,7 +150,6 @@ struct ReviewView: View {
                                 model.selectedID = session.id
                             } label: {
                                 HStack(spacing: 0) {
-                                    Rectangle().fill(selected ? Theme.accent : .clear).frame(width: 3)
                                     VStack(alignment: .leading, spacing: 3) {
                                         Text(session.displayTitle)
                                             .font(.system(size: 13, weight: selected ? .semibold : .regular))
@@ -160,10 +160,12 @@ struct ReviewView: View {
                                     .padding(.horizontal, 12).padding(.vertical, 8)
                                     Spacer(minLength: 0)
                                 }
-                                .background(selected ? Theme.accent.opacity(0.09) : .clear)
+                                .background(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .fill(selected ? Theme.accent.opacity(0.12) : .clear))
                                 .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
+                            .padding(.horizontal, 8)
                         }
                     }
                 }
@@ -174,7 +176,7 @@ struct ReviewView: View {
                 }
             }
             .frame(width: 264)
-            .background(Theme.surface.opacity(0.55))
+            .background(Theme.surface.opacity(0.4))
             Rectangle().fill(Theme.line).frame(width: 1)
 
             if let session = model.selected {
@@ -221,7 +223,7 @@ private struct SessionDetailView: View {
                 timeline
                     .padding(.horizontal, 20).padding(.vertical, 14)
                     .frame(minWidth: 300, idealWidth: 380, maxHeight: .infinity)
-                    .background(Theme.paper)
+                    .background(Theme.paper.opacity(0.5))
                 VStack(alignment: .leading, spacing: 10) {
                     Picker("", selection: $tab) {
                         Text(L("纪要")).tag(0)
@@ -236,7 +238,7 @@ private struct SessionDetailView: View {
                 }
                 .padding(.horizontal, 22).padding(.vertical, 14)
                 .frame(minWidth: 320, maxWidth: .infinity, maxHeight: .infinity)
-                .background(Theme.surface)
+                .background(Theme.surface.opacity(0.7))
             }
             .frame(maxWidth: .infinity)
         }
@@ -287,9 +289,8 @@ private struct SessionDetailView: View {
                 }
                 .menuStyle(.borderlessButton)
                 .fixedSize()
-                .padding(.horizontal, 10).padding(.vertical, 5)
-                .background(RoundedRectangle(cornerRadius: 7).fill(Theme.surface))
-                .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(Theme.line))
+                .padding(.horizontal, 12).padding(.vertical, 5)
+                .capsuleGlass()
                 Button(L("删除")) { confirmingDelete = true }
                     .buttonStyle(QuietButtonStyle())
                     .disabled(isProcessing)
@@ -450,8 +451,8 @@ private struct SessionDetailView: View {
                     HStack(spacing: 10) {
                         if !item.kind.isEmpty {
                             Text(L(item.kind)).font(.system(size: 11)).foregroundStyle(Theme.muted)
-                                .padding(.horizontal, 7).padding(.vertical, 2)
-                                .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Theme.line))
+                                .padding(.horizontal, 8).padding(.vertical, 2)
+                                .background(Capsule().fill(Theme.muted.opacity(0.12)))
                         }
                         if item.score > 0 {
                             HStack(spacing: 3) {
