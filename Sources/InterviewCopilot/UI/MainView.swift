@@ -50,6 +50,7 @@ struct MainView: View {
     @ObservedObject var reviewModel: ReviewModel
     @ObservedObject var mock: MockInterview
     @ObservedObject private var l10n = L10n.shared
+    @ObservedObject private var updates = UpdateChecker.shared
 
     var body: some View {
         NavigationSplitView {
@@ -108,6 +109,7 @@ struct MainView: View {
         .listStyle(.sidebar)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(alignment: .leading, spacing: 2) {
+                if let release = updates.available { updateBanner(release) }
                 if !checkup.problems.isEmpty {
                     Button {
                         UserDefaults.standard.set("checkup", forKey: "settingsTab")
@@ -144,6 +146,34 @@ struct MainView: View {
             }
         }
         .tag(page)
+    }
+
+    /// 有新版本时显示在侧栏底部：点主体去下载页，右上角的叉号忽略这个版本
+    private func updateBanner(_ release: UpdateChecker.Release) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "arrow.down.circle.fill").foregroundStyle(Theme.accent)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(L("有新版本 %@", release.version)).foregroundStyle(Theme.ink)
+                Text(L("点这里下载")).foregroundStyle(Theme.muted)
+            }
+            Spacer(minLength: 0)
+            Button {
+                updates.skip()
+            } label: {
+                Image(systemName: "xmark").font(.system(size: 9, weight: .bold)).foregroundStyle(Theme.muted)
+                    .frame(width: 16, height: 16).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(L("忽略这个版本"))
+        }
+        .font(.system(size: 12))
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Theme.accent.opacity(0.12)))
+        .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .onTapGesture { updates.openDownloadPage() }
+        .help(L("打开下载页"))
+        .padding(.bottom, 6)
     }
 
     /// 设置放在侧栏底部，选中时和上面的列表一样高亮

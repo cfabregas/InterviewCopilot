@@ -52,6 +52,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window.delegate = self
         installMainMenu()
         window.makeKeyAndOrderFront(nil)
+        // 自测、截图之类的命令行运行不联网查更新
+        if !CommandLine.arguments.contains(where: { $0.hasPrefix("--") }) || CommandLine.arguments.contains("--check-update") {
+            UpdateChecker.shared.checkIfDue()
+        }
         NSApp.activate(ignoringOtherApps: true)
 
         HotKeys.shared.bind(.toggleOverlay) { [weak self] in self?.settings.visible.toggle() }
@@ -343,6 +347,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
 
+    @objc private func checkUpdateFromMenu() {
+        UpdateChecker.shared.checkFromMenu()
+    }
+
     /// 手写的应用没有默认菜单：没有它就没有 ⌘Q，输入框里也不能 ⌘V 粘贴。
     private func installMainMenu() {
         let main = NSMenu()
@@ -351,6 +359,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let appMenu = NSMenu()
         let settingsItem = appMenu.addItem(withTitle: L("设置…"), action: #selector(openSettingsFromMenu), keyEquivalent: ",")
         settingsItem.target = self
+        let updateItem = appMenu.addItem(withTitle: L("检查更新…"), action: #selector(checkUpdateFromMenu), keyEquivalent: "")
+        updateItem.target = self
         appMenu.addItem(.separator())
         appMenu.addItem(withTitle: L("隐藏千人千面"), action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
         appMenu.addItem(.separator())

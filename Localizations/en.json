@@ -337,5 +337,17 @@
   "没有发现比当前更新的千问版本。": "No newer Qwen version found.",
   "逐个试调版本号不低于当前的通义千问模型，以及 DeepSeek 和 Kimi 的最新版本，只列出这个账号现在能调通的。首字延迟是单次测量，会有波动。": "Tries every Qwen model at or above your current version, plus the latest DeepSeek and Kimi versions, and lists only the ones this account can call now. First-token latency is a single measurement and varies.",
   "时间轴": "Timeline",
-  "互换翻译方向": "Swap translation direction"
+  "互换翻译方向": "Swap translation direction",
+  "GitHub 返回 HTTP %@": "GitHub returned HTTP %@",
+  "有新版本 %@": "Version %@ is available",
+  "当前是 %@。下载新的 DMG 后把应用拖进「应用程序」替换即可，设置和复盘记录都会保留。": "You have %@. Download the new DMG and drag the app into Applications to replace it. Your settings and reviews are kept.",
+  "去下载": "Download",
+  "以后再说": "Later",
+  "已经是最新版本": "You're up to date",
+  "当前版本 %@。": "Current version: %@.",
+  "检查更新失败": "Couldn't check for updates",
+  "点这里下载": "Click to download",
+  "忽略这个版本": "Skip this version",
+  "打开下载页": "Open the download page",
+  "检查更新…": "Check for Updates…"
 }
