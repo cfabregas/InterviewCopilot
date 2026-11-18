@@ -206,8 +206,8 @@ private struct SessionDetailView: View {
     let session: SessionInfo
 
     @State private var title = ""
-    /// --review-qa：调试用，打开时直接显示问答页
-    @State private var tab = CommandLine.arguments.contains("--review-qa") ? 1 : 0
+    /// 0 时间轴，1 纪要，2 问答。--review-qa：调试用，打开时直接显示问答页
+    @State private var tab = CommandLine.arguments.contains("--review-qa") ? 2 : 0
     @State private var confirmingDelete = false
     @State private var renaming: Utterance?
     @State private var newName = ""
@@ -219,28 +219,21 @@ private struct SessionDetailView: View {
         VStack(alignment: .leading, spacing: 0) {
             header
             Rectangle().fill(Theme.line).frame(height: 1)
-            HSplitView {
-                timeline
-                    .padding(.horizontal, 20).padding(.vertical, 14)
-                    .frame(minWidth: 300, idealWidth: 380, maxHeight: .infinity)
-                    .background(Theme.paper.opacity(0.5))
-                VStack(alignment: .leading, spacing: 10) {
-                    Picker("", selection: $tab) {
-                    Text(L("纪要")).tag(0)
-                    Text(L("问答 %@", "\(model.qa.count)")).tag(1)
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .controlSize(.large)
-                .fixedSize()
-                    ScrollView {
-                        if tab == 0 { summaryView } else { qaView }
+            // 时间轴、纪要、问答用一个滑块切换，一次只看一样
+            VStack(alignment: .leading, spacing: 14) {
+                SlidingPicker(selection: $tab, options: [(0, L("时间轴")), (1, L("纪要")), (2, L("问答 %@", "\(model.qa.count)"))])
+                Group {
+                    switch tab {
+                    case 0: timeline
+                    case 1: ScrollView { summaryView.frame(maxWidth: 820, alignment: .leading) }
+                    default: ScrollView { qaView.frame(maxWidth: 820, alignment: .leading) }
                     }
                 }
-                .padding(.horizontal, 22).padding(.vertical, 14)
-                .frame(minWidth: 320, maxWidth: .infinity, maxHeight: .infinity)
-                .background(Theme.surface.opacity(0.7))
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
+            .padding(.horizontal, 22).padding(.top, 14).padding(.bottom, 10)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background(Theme.surface.opacity(0.5))
             .frame(maxWidth: .infinity)
         }
         .onAppear { title = session.title }

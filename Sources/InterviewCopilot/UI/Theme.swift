@@ -231,3 +231,111 @@ extension View {
         }
     }
 }
+
+/// 日历那种分段滑块：白色玻璃胶囊底，选中的一段是浅灰色圆块。
+/// 可以点击，也可以按住拖动：拖动时圆块变成跟着手指走的玻璃透镜，松手吸附到最近的一段。
+struct SlidingPicker<Value: Hashable>: View {
+    @Binding var selection: Value
+    let options: [(value: Value, title: String)]
+    @State private var frames: [Int: CGRect] = [:]
+    @State private var dragX: CGFloat?
+    @Environment(\.isEnabled) private var enabled
+
+    private var selectedIndex: Int { options.firstIndex { $0.value == selection } ?? 0 }
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            thumb
+            HStack(spacing: 0) {
+                ForEach(Array(options.enumerated()), id: \.offset) { index, option in
+                    Text(option.title)
+                        .font(.system(size: 14, weight: index == selectedIndex ? .semibold : .regular))
+                        .foregroundStyle(Theme.ink)
+                        .lineLimit(1)
+                        .fixedSize()
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 7)
+                        .frame(minWidth: 64)
+                        .background(GeometryReader { proxy in
+                            Color.clear.preference(key: SegmentFrames.self, value: [index: proxy.frame(in: .named("sliding"))])
+                        })
+                        .contentShape(Rectangle())
+                        .accessibilityElement()
+                        .accessibilityLabel(option.title)
+                        .accessibilityAddTraits(index == selectedIndex ? [.isButton, .isSelected] : .isButton)
+                        .accessibilityAction { choose(index) }
+                }
+            }
+        }
+        .coordinateSpace(name: "sliding")
+        .onPreferenceChange(SegmentFrames.self) { value in
+            MainActor.assumeIsolated { frames = value }
+        }
+        .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .named("sliding"))
+            .onChanged { drag in
+                guard enabled else { return }
+                // 按下后稍微挪动才算拖动，原地松开当作点击
+                if dragX != nil || abs(drag.translation.width) > 3 { dragX = drag.location.x }
+            }
+            .onEnded { drag in
+                guard enabled else { return }
+                let index = nearest(drag.location.x)
+                withAnimation(.spring(response: 0.32, dampingFraction: 0.78)) {
+                    dragX = nil
+                    if options.indices.contains(index) { selection = options[index].value }
+                }
+            })
+        .padding(4)
+        .background(track)
+        .opacity(enabled ? 1 : 0.45)
+    }
+
+    /// 选中块：平时是浅灰圆块，拖动时变成玻璃透镜
+    @ViewBuilder
+    private var thumb: some View {
+        let index = dragX.map(nearest) ?? selectedIndex
+        if let frame = frames[index] {
+            let width = frame.width
+            let total = frames.values.map(\.maxX).max() ?? width
+            let x = dragX.map { min(max($0 - width / 2, 0), total - width) } ?? frame.minX
+            Group {
+                if dragX != nil, #available(macOS 26, *) {
+                    Capsule().fill(Color.white.opacity(0.15))
+                        .glassEffect(.clear.interactive(), in: Capsule())
+                        .scaleEffect(1.12)
+                } else {
+                    Capsule().fill(Theme.ink.opacity(dragX == nil ? 0.08 : 0.12))
+                }
+            }
+            .frame(width: width, height: frame.height)
+            .offset(x: x, y: frame.minY)
+        }
+    }
+
+    @ViewBuilder
+    private var track: some View {
+        if #available(macOS 26, *) {
+            Capsule().fill(Theme.surface.opacity(0.5)).glassEffect(.regular, in: Capsule())
+        } else {
+            Capsule().fill(Theme.surface)
+                .overlay(Capsule().strokeBorder(Theme.line))
+                .shadow(color: .black.opacity(0.06), radius: 6, y: 2)
+        }
+    }
+
+    private func nearest(_ x: CGFloat) -> Int {
+        frames.min { abs($0.value.midX - x) < abs($1.value.midX - x) }?.key ?? selectedIndex
+    }
+
+    private func choose(_ index: Int) {
+        guard enabled, options.indices.contains(index) else { return }
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.78)) { selection = options[index].value }
+    }
+}
+
+private struct SegmentFrames: PreferenceKey {
+    static let defaultValue: [Int: CGRect] = [:]
+    static func reduce(value: inout [Int: CGRect], nextValue: () -> [Int: CGRect]) {
+        value.merge(nextValue()) { $1 }
+    }
+}
