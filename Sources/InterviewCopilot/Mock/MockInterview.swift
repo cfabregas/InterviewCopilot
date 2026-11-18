@@ -267,7 +267,10 @@ final class MockInterview: ObservableObject {
     /// 读一段话。record 为 true 时把这段语音记进面试官的音轨。
     private func speak(_ text: String, record: Bool) async {
         prefetch(text)
-        if let clip = await prefetched[text]?.value {
+        var clip = await prefetched[text]?.value
+        // 云端合成不可用时用系统语音渲染成音频，同样走录音引擎播放，也记进面试官音轨
+        if clip == nil { clip = await synth.systemVoiceClip(text, chinese: config.chinese) }
+        if let clip {
             if record { clips.append((nowMs, clip)) }
             await synth.play(clip)
         } else {
@@ -418,6 +421,7 @@ final class MockInterview: ObservableObject {
             asr.feed(copy)
         }
         Log.write("模拟面试麦克风：\(Int(format.sampleRate)) Hz，回声消除\(echoCancelled ? "已开启" : "未开启")")
+        synth.attach(to: engine)
         try engine.start()
         startedAt = Date()
 

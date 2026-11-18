@@ -17,7 +17,14 @@ final class SpeechSynth: NSObject, AVAudioPlayerDelegate, AVSpeechSynthesizerDel
 
     private var player: AVAudioPlayer?
     private let system = AVSpeechSynthesizer()
+    /// 把系统语音渲染成音频数据，不直接出声
+    private let renderer = AVSpeechSynthesizer()
     private var finished: CheckedContinuation<Void, Never>?
+    /// 接在录音用的音频引擎上的播放器，见 attach(to:)
+    private weak var engine: AVAudioEngine?
+    private var node: AVAudioPlayerNode?
+    /// 每次播放的编号：停掉旧的播放时，它迟到的结束回调不会误结束新的播放
+    private var playID = 0
 
     override init() {
         super.init()
@@ -57,15 +64,55 @@ final class SpeechSynth: NSObject, AVAudioPlayerDelegate, AVSpeechSynthesizerDel
         return wav.subdata(in: (range.upperBound + 4)..<wav.count)
     }
 
+    /// 让面试官的声音走录音用的同一个音频引擎播放。
+    /// 系统回声消除只把本引擎播放的声音当作参考信号：这样既不会被当成"其他应用的声音"压低音量，
+    /// 也能从麦克风里消掉。要在引擎启动前调用。
+    func attach(to engine: AVAudioEngine) {
+        guard let format = Self.floatFormat else { return }
+        let node = AVAudioPlayerNode()
+        engine.attach(node)
+        engine.connect(node, to: engine.mainMixerNode, format: format)
+        self.engine = engine
+        self.node = node
+    }
+
     /// 播放一段合成好的语音，播完才返回
     func play(_ clip: Clip) async {
         stop()
+        if let node, let engine, engine.isRunning, let buffer = Self.floatBuffer(clip) {
+            let id = playID
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                finished = continuation
+                node.scheduleBuffer(buffer, at: nil, options: [], completionCallbackType: .dataPlayedBack) { _ in
+                    Task { @MainActor in if self.playID == id { self.finish() } }
+                }
+                node.play()
+            }
+            return
+        }
         guard let player = try? AVAudioPlayer(data: clip.wav) else { return }
         self.player = player
         player.delegate = self
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             finished = continuation
             if !player.play() { finish() }
+        }
+    }
+
+    /// 用系统自带语音把一段话渲染成音频(不出声)，渲染不出来时返回 nil
+    func systemVoiceClip(_ text: String, chinese: Bool) async -> Clip? {
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        let utterance = AVSpeechUtterance(string: text)
+        utterance.voice = AVSpeechSynthesisVoice(language: chinese ? "zh-CN" : "en-US")
+        let collector = BufferCollector()
+        return await withCheckedContinuation { (continuation: CheckedContinuation<Clip?, Never>) in
+            collector.onDone = { buffers in continuation.resume(returning: SpeechSynth.clip(from: buffers)) }
+            renderer.write(utterance) { buffer in
+                guard let pcm = buffer as? AVAudioPCMBuffer else { return }
+                if pcm.frameLength == 0 { collector.finish() } else { collector.append(pcm) }
+            }
+            // 万一系统没有发结束信号，最多等 20 秒
+            DispatchQueue.global().asyncAfter(deadline: .now() + 20) { collector.finish() }
         }
     }
 
@@ -81,6 +128,8 @@ final class SpeechSynth: NSObject, AVAudioPlayerDelegate, AVSpeechSynthesizerDel
     }
 
     func stop() {
+        playID += 1
+        node?.stop()
         player?.stop()
         player = nil
         if system.isSpeaking { system.stopSpeaking(at: .immediate) }
@@ -102,6 +151,57 @@ final class SpeechSynth: NSObject, AVAudioPlayerDelegate, AVSpeechSynthesizerDel
 
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
         Task { @MainActor in self.finish() }
+    }
+
+    nonisolated static let floatFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: sampleRate, channels: 1, interleaved: false)
+
+    /// 16 位 PCM 转成播放器要的浮点缓冲
+    nonisolated static func floatBuffer(_ clip: Clip) -> AVAudioPCMBuffer? {
+        let pcm = clip.pcm
+        let count = pcm.count / 2
+        guard count > 0, let format = floatFormat,
+              let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(count)),
+              let channel = buffer.floatChannelData?[0] else { return nil }
+        buffer.frameLength = AVAudioFrameCount(count)
+        pcm.withUnsafeBytes { raw in
+            let samples = raw.bindMemory(to: Int16.self)
+            for i in 0..<count { channel[i] = Float(samples[i]) / 32768 }
+        }
+        return buffer
+    }
+
+    /// 系统语音渲染出来的若干段音频，统一转成 24 kHz 单声道 16 位，包成 Clip
+    nonisolated static func clip(from buffers: [AVAudioPCMBuffer]) -> Clip? {
+        guard let first = buffers.first,
+              let target = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: sampleRate, channels: 1, interleaved: true),
+              let converter = AVAudioConverter(from: first.format, to: target) else { return nil }
+        let frames = buffers.reduce(0) { $0 + Int($1.frameLength) }
+        let capacity = AVAudioFrameCount(Double(frames) * sampleRate / first.format.sampleRate) + 4096
+        guard frames > 0, let output = AVAudioPCMBuffer(pcmFormat: target, frameCapacity: capacity) else { return nil }
+        var index = 0
+        var error: NSError?
+        let status = converter.convert(to: output, error: &error) { _, inputStatus in
+            guard index < buffers.count else { inputStatus.pointee = .endOfStream; return nil }
+            inputStatus.pointee = .haveData
+            index += 1
+            return buffers[index - 1]
+        }
+        guard status != .error, output.frameLength > 0, let samples = output.int16ChannelData?[0] else { return nil }
+        return Clip(wav: wav(fromPCM: Data(bytes: samples, count: Int(output.frameLength) * 2)))
+    }
+
+    /// 给 24 kHz 单声道 16 位 PCM 加上 WAV 文件头
+    nonisolated static func wav(fromPCM pcm: Data) -> Data {
+        var data = Data()
+        func text(_ s: String) { data.append(contentsOf: Array(s.utf8)) }
+        func u32(_ v: UInt32) { withUnsafeBytes(of: v.littleEndian) { data.append(contentsOf: $0) } }
+        func u16(_ v: UInt16) { withUnsafeBytes(of: v.littleEndian) { data.append(contentsOf: $0) } }
+        let rate = UInt32(sampleRate)
+        text("RIFF"); u32(UInt32(36 + pcm.count)); text("WAVE")
+        text("fmt "); u32(16); u16(1); u16(1); u32(rate); u32(rate * 2); u16(2); u16(16)
+        text("data"); u32(UInt32(pcm.count))
+        data.append(pcm)
+        return data
     }
 
     /// 把面试官说过的每一段语音按时间排进一条音轨，写成录音文件(复盘时回放用)
@@ -137,5 +237,35 @@ final class SpeechSynth: NSObject, AVAudioPlayerDelegate, AVSpeechSynthesizerDel
         }
         let totalFrames = Int(Double(totalMs) / 1000 * sampleRate)
         if totalFrames > written { try write([Float](repeating: 0, count: totalFrames - written)) }
+    }
+}
+
+/// 收集系统语音渲染回调送来的音频，结束时只回调一次
+private final class BufferCollector: @unchecked Sendable {
+    private let lock = NSLock()
+    private var buffers: [AVAudioPCMBuffer] = []
+    private var done = false
+    var onDone: (([AVAudioPCMBuffer]) -> Void)?
+
+    func append(_ buffer: AVAudioPCMBuffer) {
+        // 系统可能复用缓冲，拷一份
+        guard let copy = AVAudioPCMBuffer(pcmFormat: buffer.format, frameCapacity: buffer.frameLength) else { return }
+        copy.frameLength = buffer.frameLength
+        let bytes = Int(buffer.frameLength) * Int(buffer.format.streamDescription.pointee.mBytesPerFrame)
+        let source = UnsafeMutableAudioBufferListPointer(UnsafeMutablePointer(mutating: buffer.audioBufferList))
+        let target = UnsafeMutableAudioBufferListPointer(copy.mutableAudioBufferList)
+        for (from, to) in zip(source, target) {
+            if let src = from.mData, let dst = to.mData { memcpy(dst, src, min(bytes, Int(from.mDataByteSize))) }
+        }
+        lock.lock(); if !done { buffers.append(copy) }; lock.unlock()
+    }
+
+    func finish() {
+        lock.lock()
+        guard !done else { lock.unlock(); return }
+        done = true
+        let result = buffers
+        lock.unlock()
+        onDone?(result)
     }
 }

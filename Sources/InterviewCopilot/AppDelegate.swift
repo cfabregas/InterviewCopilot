@@ -103,6 +103,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if let arg = CommandLine.arguments.first(where: { $0.hasPrefix("--echo-test=") }) {
             Task { await runEchoTest(URL(fileURLWithPath: String(arg.dropFirst(12)))) }
         }
+        if let arg = CommandLine.arguments.first(where: { $0.hasPrefix("--voice-test=") }) {
+            Task { await runVoiceTest(URL(fileURLWithPath: String(arg.dropFirst(13)))) }
+        }
         if CommandLine.arguments.contains("--autotest") {
             Task { await runAutotest() }
         }
@@ -234,6 +237,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             try? await Task.sleep(nanoseconds: 1_000_000_000)
         }
         Log.write("回声自测：" + results.joined(separator: "；"))
+        NSApp.terminate(nil)
+    }
+
+    /// 模拟面试的出声方式自测：系统语音渲染成音频，先走录音引擎播放，再用独立播放器播放，比较麦克风里录到多少
+    private func runVoiceTest(_ dir: URL) async {
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let synth = SpeechSynth()
+        let text = "Thanks for joining us today. Could you start by telling me about a challenging project you worked on recently?"
+        guard let clip = await synth.systemVoiceClip(text, chinese: false) else {
+            Log.write("出声自测：系统语音渲染失败"); NSApp.terminate(nil); return
+        }
+        var results = [String(format: "渲染出 %.1f 秒", clip.seconds)]
+        for viaEngine in [true, false] {
+            let engine = AVAudioEngine()
+            let cancelled = VoiceInput.enableEchoCancellation(engine)
+            let format = engine.inputNode.outputFormat(forBus: 0)
+            guard let mono = VoiceInput.monoFormat(for: format) else { break }
+            let url = dir.appendingPathComponent(viaEngine ? "via-engine.m4a" : "via-player.m4a")
+            guard let recorder = try? AudioFileRecorder(url: url, format: mono) else { break }
+            engine.inputNode.installTap(onBus: 0, bufferSize: 4096, format: format) { buffer, _ in
+                if let copy = VoiceInput.mono(buffer, format: mono) { recorder.write(copy) }
+            }
+            let player = SpeechSynth()
+            if viaEngine { player.attach(to: engine) }
+            do { try engine.start() } catch { Log.write("出声自测：引擎启动失败 \(error)"); break }
+            try? await Task.sleep(nanoseconds: 800_000_000)
+            let start = Date()
+            await player.play(clip)
+            let played = Date().timeIntervalSince(start)
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            engine.inputNode.removeTap(onBus: 0)
+            engine.stop()
+            recorder.close()
+            results.append(String(format: "%@(回声消除%@)：播放 %.1f 秒，麦克风 %@",
+                                  viaEngine ? "走录音引擎" : "独立播放器", cancelled ? "开" : "关", played, Self.loudness(url)))
+            try? await Task.sleep(nanoseconds: 800_000_000)
+        }
+        Log.write("出声自测：" + results.joined(separator: "；"))
         NSApp.terminate(nil)
     }
 
