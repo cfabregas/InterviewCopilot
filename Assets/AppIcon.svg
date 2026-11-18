@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3A62A3"/>
+      <stop offset="1" stop-color="#24447A"/>
+    </linearGradient>
+  </defs>
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)"/>
+  <!-- 「面」字中间两横用字幕的琥珀色，画在竖笔下面，两端被竖笔盖住 -->
+  <g stroke="#E9B44C" stroke-width="54">
+    <path d="M440 528H584M440 652H584"/>
+  </g>
+  <g fill="none" stroke="#FFFFFF" stroke-width="58" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M262 292H762"/>
+    <path d="M512 292L470 392"/>
+    <rect x="300" y="404" width="424" height="372" rx="30"/>
+    <path d="M440 404V776M584 404V776"/>
+  </g>
+</svg>

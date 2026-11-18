@@ -26,6 +26,8 @@ cat > "$APP/Contents/Resources/en.lproj/InfoPlist.strings" <<'STRINGS'
 "NSSpeechRecognitionUsageDescription" = "Transcribes speech to text on this Mac.";
 STRINGS
 touch "$APP/Contents/Resources/zh-Hans.lproj/InfoPlist.strings"
+# 应用图标：改了 Assets/AppIcon.svg 后运行 swift Assets/make-icon.swift 重新生成
+cp Assets/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 
 cat > "$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -37,6 +39,7 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
     <key>CFBundleDisplayName</key><string>千人千面</string>
     <key>CFBundleDevelopmentRegion</key><string>zh-Hans</string>
     <key>CFBundleExecutable</key><string>InterviewCopilot</string>
+    <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>0.1.0</string>
     <key>CFBundleVersion</key><string>1</string>
