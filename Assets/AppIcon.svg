@@ -6,14 +6,14 @@
     </linearGradient>
   </defs>
   <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)"/>
-  <!-- 「面」字中间两横用字幕的琥珀色，画在竖笔下面，两端被竖笔盖住 -->
-  <g stroke="#E9B44C" stroke-width="54">
-    <path d="M440 528H584M440 652H584"/>
-  </g>
   <g fill="none" stroke="#FFFFFF" stroke-width="58" stroke-linecap="round" stroke-linejoin="round">
     <path d="M262 292H762"/>
     <path d="M512 292L470 392"/>
     <rect x="300" y="404" width="424" height="372" rx="30"/>
     <path d="M440 404V776M584 404V776"/>
+  </g>
+  <!-- 「面」字中间两横用字幕的琥珀色，圆头压在白色竖笔上面 -->
+  <g stroke="#E9B44C" stroke-width="50" stroke-linecap="round">
+    <path d="M462 530H562M462 652H562"/>
   </g>
 </svg>
