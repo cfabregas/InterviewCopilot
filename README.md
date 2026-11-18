@@ -47,7 +47,7 @@
 
 ## 安装
 
-1. 到 [Releases](../../releases) 下载最新版本的 `InterviewCopilot.zip`，解压后把 `InterviewCopilot.app` 拖进「应用程序」文件夹，打开后应用名显示为「千人千面」。
+1. 到 [Releases](../../releases) 下载最新版本的 `InterviewCopilot.dmg`，双击打开，把 `InterviewCopilot.app` 拖到旁边的「应用程序」文件夹上，打开后应用名显示为「千人千面」。
 2. 这个应用没有经过苹果公证，第一次打开时系统会提示无法验证开发者。打开「系统设置 › 隐私与安全性」，在页面下方找到 InterviewCopilot，点「仍要打开」。
    也可以在终端运行下面这条命令，之后就能正常双击打开：
 
@@ -95,7 +95,7 @@
 InterviewCopilot is a macOS companion for online interviews. It transcribes and translates what the interviewer says in real time (English ↔ Chinese), shows captions in a floating window that stays hidden from screen sharing, and suggests answers based on your résumé. After the interview it re-transcribes the recording, scores each answer, writes reference answers and a summary. You can also practice with a voice-driven mock interview.
 
 - Requires macOS 14.2 or later, on Apple silicon or Intel Macs.
-- Download the latest build from [Releases](../../releases). The app isn't notarized: on first launch, go to System Settings › Privacy & Security and click "Open Anyway".
+- Download `InterviewCopilot.dmg` from [Releases](../../releases), open it and drag the app onto the Applications folder. The app isn't notarized: on first launch, go to System Settings › Privacy & Security and click "Open Anyway".
 - Bring your own API keys (Alibaba Cloud Bailian, Deepgram, AssemblyAI, or Anthropic). A single Alibaba Cloud Bailian key covers transcription, answers, reviews and mock-interview speech. Keys stay on your Mac.
 - The interface is available in Chinese and English and follows your system language by default.
 - Licensed under the [MIT License](LICENSE).
