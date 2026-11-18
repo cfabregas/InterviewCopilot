@@ -289,24 +289,22 @@ private struct TranslationDownload: ViewModifier {
     }
 }
 
-/// 翻译方向：「源语言 ⇄ 目标语言」，点中间的箭头或任一侧都能互换。
+/// 翻译方向：「英文 ⇄ 中文」两种语言位置固定，中间上下两支箭头只亮当前方向那支，点一下互换。
 struct LanguageSwapControl: View {
     @Binding var mode: LanguageMode
     @Environment(\.isEnabled) private var enabled
-    @Namespace private var space
 
-    private var source: String { mode == .enToZh ? L("英文") : L("中文") }
-    private var target: String { mode == .enToZh ? L("中文") : L("英文") }
+    private var forward: Bool { mode == .enToZh }
 
     var body: some View {
         Button(action: swap) {
             HStack(spacing: 10) {
-                label(source, id: mode == .enToZh ? "en" : "zh")
-                Image(systemName: "arrow.left.arrow.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(enabled ? Theme.accent : Theme.muted)
-                    .rotationEffect(.degrees(mode == .enToZh ? 0 : 180))
-                label(target, id: mode == .enToZh ? "zh" : "en")
+                label(L("英文"), active: forward)
+                VStack(spacing: 1) {
+                    arrow("arrow.right", lit: forward)
+                    arrow("arrow.left", lit: !forward)
+                }
+                label(L("中文"), active: !forward)
             }
             .padding(.horizontal, 18)
             .padding(.vertical, 8)
@@ -320,17 +318,23 @@ struct LanguageSwapControl: View {
         .accessibilityHint(L("互换翻译方向"))
     }
 
-    private func label(_ text: String, id: String) -> some View {
+    /// 源语言加粗，译成的语言常规
+    private func label(_ text: String, active: Bool) -> some View {
         Text(text)
-            .font(.system(size: 14, weight: .medium))
+            .font(.system(size: 14, weight: active ? .semibold : .regular))
             .foregroundStyle(Theme.ink)
             .fixedSize()
-            .matchedGeometryEffect(id: id, in: space)
+    }
+
+    private func arrow(_ name: String, lit: Bool) -> some View {
+        Image(systemName: name)
+            .font(.system(size: 10, weight: .bold))
+            .foregroundStyle(lit && enabled ? Theme.accent : Theme.muted.opacity(0.35))
     }
 
     private func swap() {
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-            mode = mode == .enToZh ? .zhToEn : .enToZh
+        withAnimation(.easeInOut(duration: 0.2)) {
+            mode = forward ? .zhToEn : .enToZh
         }
     }
 }
