@@ -441,6 +441,7 @@ final class MockInterview: ObservableObject {
             engine.inputNode.removeTap(onBus: 0)
             engine.stop()
         }
+        VoiceInput.disableEchoCancellation(engine)
         recorder?.close()
         recorder = nil
         await asr?.stop()

@@ -219,7 +219,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let text = "Thanks for joining us today. Could you start by telling me about a challenging project you worked on recently?"
         var results: [String] = []
-        for on in [false, true] {
+        // 先开后关：确认开过回声消除之后，普通录音照样录得到
+        for on in [true, false] {
             let url = dir.appendingPathComponent(on ? "mic-aec.m4a" : "mic-plain.m4a")
             let recorder = MicRecorder()
             do { try recorder.start(url: url, voiceProcessing: on) } catch { Log.write("回声自测录音失败：\(error)"); return }
@@ -269,6 +270,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             try? await Task.sleep(nanoseconds: 500_000_000)
             engine.inputNode.removeTap(onBus: 0)
             engine.stop()
+            VoiceInput.disableEchoCancellation(engine)
             recorder.close()
             results.append(String(format: "%@(回声消除%@)：播放 %.1f 秒，麦克风 %@",
                                   viaEngine ? "走录音引擎" : "独立播放器", cancelled ? "开" : "关", played, Self.loudness(url)))

@@ -28,9 +28,10 @@ final class AudioFileRecorder {
     }
 }
 
-/// 麦克风输入的公共处理：打开系统的语音处理(和 FaceTime 一样的回声消除)，并把输入整理成单声道。
-/// 系统会把扬声器正在播放的声音从麦克风里减掉，外放听对方说话时，录音里不会再混进对方的声音。
-/// 注意：同一次运行里一旦有录音开过语音处理，之后不开的录音会拿不到声音，所以所有用麦克风的地方都走这里。
+/// 麦克风输入的公共处理：可以打开系统的语音处理(和 FaceTime 一样的回声消除)，并把输入整理成单声道。
+/// 系统会把扬声器正在播放的声音从麦克风里减掉，但同时会压低其他应用(比如会议软件)的音量，
+/// 所以只有模拟面试用它；真实面试不开，保证听得清对方。
+/// 注意：开过语音处理的引擎停下后要关掉语音处理，否则同一次运行里之后不开的录音会拿不到声音。
 enum VoiceInput {
     /// 打开回声消除，返回是否成功(设备不支持时退回普通录音)
     static func enableEchoCancellation(_ engine: AVAudioEngine) -> Bool {
@@ -56,6 +57,12 @@ enum VoiceInput {
         return true
     }
 
+    /// 停下引擎后调用：关掉语音处理，恢复麦克风的普通状态
+    static func disableEchoCancellation(_ engine: AVAudioEngine) {
+        guard engine.inputNode.isVoiceProcessingEnabled else { return }
+        do { try engine.inputNode.setVoiceProcessingEnabled(false) } catch { Log.write("关闭回声消除失败：\(error)") }
+    }
+
     /// 和输入同采样率的单声道格式
     static func monoFormat(for format: AVAudioFormat) -> AVAudioFormat? {
         AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: format.sampleRate, channels: 1, interleaved: false)
@@ -72,7 +79,7 @@ enum VoiceInput {
     }
 }
 
-/// 麦克风录音，默认开回声消除
+/// 麦克风录音，默认不开回声消除(会压低会议软件的声音)
 final class MicRecorder {
     private let engine = AVAudioEngine()
     private var recorder: AudioFileRecorder?
@@ -82,7 +89,7 @@ final class MicRecorder {
         await AVCaptureDevice.requestAccess(for: .audio)
     }
 
-    func start(url: URL, voiceProcessing: Bool = true) throws {
+    func start(url: URL, voiceProcessing: Bool = false) throws {
         let echoCancelled = voiceProcessing && VoiceInput.enableEchoCancellation(engine)
         let input = engine.inputNode
         let format = input.outputFormat(forBus: 0)
@@ -103,6 +110,7 @@ final class MicRecorder {
         guard startedAt != nil else { return }
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
+        VoiceInput.disableEchoCancellation(engine)
         recorder?.close()
         recorder = nil
         startedAt = nil
