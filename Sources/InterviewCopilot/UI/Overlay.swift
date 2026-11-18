@@ -18,7 +18,7 @@ final class OverlaySettings: ObservableObject {
 
     @Published var clickThrough: Bool = saved("clickThrough", true) {
         didSet {
-            panel?.ignoresMouseEvents = clickThrough
+            (panel as? OverlayPanel)?.setClickThrough(clickThrough)
             save("clickThrough", clickThrough)
         }
     }
@@ -70,6 +70,12 @@ final class OverlayPanel: NSPanel {
         if frame.height > maxSize.height || frame.width > maxSize.width || !screen.contains(frame) {
             setFrame(rect, display: false)
         }
+    }
+
+    /// 鼠标穿透时不接收任何鼠标事件，也去掉可调整大小：否则鼠标移到边缘仍会出现调整大小的光标，却拖不动
+    func setClickThrough(_ on: Bool) {
+        ignoresMouseEvents = on
+        if on { styleMask.remove(.resizable) } else { styleMask.insert(.resizable) }
     }
 
     override var canBecomeKey: Bool { false }

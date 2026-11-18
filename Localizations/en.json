@@ -47,7 +47,7 @@
   "密钥(明文存在本机应用数据目录)": "Keys (stored as plain text in the app data folder)",
   "阿里云百炼": "Alibaba Cloud",
   "阿里云密钥同时用于国内转写、通义千问和模拟面试的语音合成；AssemblyAI 密钥同时用于会后重新转写。": "The Alibaba Cloud key also powers Qwen and the mock interviewer's voice. The AssemblyAI key also powers re-transcription for reviews.",
-  "大模型": "Language model",
+  "大模型": "Model",
   "线路": "Provider",
   "快档模型": "Fast-tier model",
   "强档模型": "Strong-tier model",

@@ -28,7 +28,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         overlay = OverlayPanel(content: SubtitleOverlayView(controller: controller, settings: settings, answers: answers))
         settings.panel = overlay
-        overlay.ignoresMouseEvents = settings.clickThrough   // 默认鼠标穿透，可用快捷键切换
+        overlay.setClickThrough(settings.clickThrough)   // 默认鼠标穿透，可用快捷键切换
         overlay.sharingType = settings.hideFromSharing ? .none : .readOnly
         checkup.sessionRunning = { [weak self] in self?.controller.isRunning ?? false }
 

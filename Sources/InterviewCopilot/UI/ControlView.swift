@@ -38,14 +38,19 @@ struct ListenPage: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            PageHeader(title: L("面试助手"), subtitle: L("听对方说话，实时出字幕、译文和回答提示"))
-            VStack(alignment: .leading, spacing: 22) {
-                stagePanel
-                readiness
-                shortcuts
+            // 内容可以滚动，日志固定在底部：日志展开后窗口不够高时也不会把整页顶出窗口
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    PageHeader(title: L("面试助手"), subtitle: L("听对方说话，实时出字幕、译文和回答提示"))
+                    VStack(alignment: .leading, spacing: 22) {
+                        stagePanel
+                        readiness
+                        shortcuts
+                    }
+                    .padding(.horizontal, 28)
+                    .padding(.bottom, 16)
+                }
             }
-            .padding(.horizontal, 28)
-            Spacer(minLength: 12)
             logDrawer
         }
         .onAppear {
@@ -218,18 +223,25 @@ struct ListenPage: View {
             .help(showLog ? L("收起日志") : L("展开日志"))
 
             if showLog {
+                // 新日志进来时滚到最底下，最后一行下面留出边距，不会被窗口底边切掉
                 ScrollViewReader { proxy in
                     ScrollView {
-                        Text(log.text)
-                            .font(.system(size: 11, design: .monospaced))
-                            .foregroundStyle(Theme.ink.opacity(0.85))
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .textSelection(.enabled)
-                            .padding(.horizontal, 28)
-                        Color.clear.frame(height: 8).id("end")
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text(log.text)
+                                .font(.system(size: 11, design: .monospaced))
+                                .foregroundStyle(Theme.ink.opacity(0.85))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .textSelection(.enabled)
+                            Color.clear.frame(height: 16).id("end")
+                        }
+                        .padding(.horizontal, 28)
+                        .padding(.top, 4)
                     }
-                    .onChange(of: log.text) { proxy.scrollTo("end") }
-                    .onAppear { proxy.scrollTo("end") }
+                    .defaultScrollAnchor(.bottom)
+                    .onChange(of: log.text) {
+                        // 等这一轮布局完成再滚，否则新内容的高度还没算进去，会差最后几行
+                        DispatchQueue.main.async { proxy.scrollTo("end", anchor: .bottom) }
+                    }
                 }
                 .frame(height: 190)
             }

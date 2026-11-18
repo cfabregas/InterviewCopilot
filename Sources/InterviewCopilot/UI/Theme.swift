@@ -249,7 +249,7 @@ struct SlidingPicker<Value: Hashable>: View {
             HStack(spacing: 0) {
                 ForEach(Array(options.enumerated()), id: \.offset) { index, option in
                     Text(option.title)
-                        .font(.system(size: 14, weight: index == selectedIndex ? .semibold : .regular))
+                        .font(.system(size: 14))
                         .foregroundStyle(Theme.ink)
                         .lineLimit(1)
                         .fixedSize()
