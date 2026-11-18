@@ -16,12 +16,7 @@ struct SettingsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             PageHeader(title: L("设置"), subtitle: L("大模型、悬浮窗、快捷键和权限")) {
-                Picker("", selection: $tab) {
-                    ForEach(tabs, id: \.0) { Text($0.1).tag($0.0) }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .frame(width: 380)
+                SlidingPicker(selection: $tab, options: tabs.map { ($0.0, $0.1) })
             }
             Group {
                 switch tab {

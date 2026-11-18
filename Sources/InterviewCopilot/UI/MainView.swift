@@ -80,7 +80,6 @@ struct MainView: View {
             .ignoresSafeArea(.container, edges: [.top, .bottom])
         }
         .navigationSplitViewStyle(.balanced)
-        .tint(Theme.accent)
         .onChange(of: navigator.page) {
             if navigator.page == .review { reviewModel.reload() }
             if navigator.page == .settings { checkup.refresh() }
@@ -99,11 +98,8 @@ struct MainView: View {
             Section {
                 ForEach([Page.listen, .mock, .review, .resume]) { row($0) }
             } header: {
-                HStack(spacing: 8) {
-                    Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 22, height: 22)
-                    Text(L("千人千面")).font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.ink)
-                }
-                .padding(.bottom, 8)
+                Text(L("千人千面")).font(.system(size: 22, weight: .bold)).foregroundStyle(Theme.ink)
+                    .padding(.bottom, 10)
             }
             .collapsible(false)
         }

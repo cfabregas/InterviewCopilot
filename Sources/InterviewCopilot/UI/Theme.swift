@@ -81,16 +81,17 @@ struct PrimaryButtonStyle: ButtonStyle {
     }
 }
 
-/// 次要动作：胶囊形的玻璃按钮
+/// 次要动作：胶囊形的玻璃按钮。large 和 PrimaryButtonStyle 的 large 一样大，两个并排时用
 struct QuietButtonStyle: ButtonStyle {
+    var large = false
     @Environment(\.isEnabled) private var enabled
 
     func makeBody(configuration: Configuration) -> some View {
         let label = configuration.label
-            .font(.system(size: 13))
+            .font(.system(size: large ? 14 : 13, weight: large ? .semibold : .regular))
             .foregroundStyle(Theme.ink)
-            .padding(.horizontal, 13)
-            .padding(.vertical, 5)
+            .padding(.horizontal, large ? 22 : 13)
+            .padding(.vertical, large ? 9 : 5)
         return Group {
             if #available(macOS 26, *) {
                 label.glassEffect(.regular.interactive(), in: Capsule())
@@ -228,5 +229,74 @@ extension View {
                 .overlay(shape.strokeBorder(Color.white.opacity(0.4)))
                 .shadow(color: .black.opacity(0.06), radius: 18, y: 6)
         }
+    }
+}
+
+/// 滑块式的分段选择：浅色胶囊轨道上一块白色的滑块(macOS 26 起是玻璃)，点哪一段就滑到哪一段，也可以按住拖动
+struct SlidingPicker<Value: Hashable>: View {
+    @Binding var selection: Value
+    let options: [(value: Value, title: String)]
+    @Namespace private var namespace
+    @State private var frames: [Int: CGRect] = [:]
+    @Environment(\.isEnabled) private var enabled
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(Array(options.enumerated()), id: \.offset) { index, option in
+                let selected = option.value == selection
+                Text(option.title)
+                    .font(.system(size: 13, weight: selected ? .semibold : .regular))
+                    .foregroundStyle(selected ? Theme.ink : Theme.muted)
+                    .lineLimit(1)
+                    .fixedSize()
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 5)
+                    .background {
+                        if selected { thumb.matchedGeometryEffect(id: "thumb", in: namespace) }
+                    }
+                    .background(GeometryReader { proxy in
+                        Color.clear.preference(key: SegmentFrames.self, value: [index: proxy.frame(in: .named("sliding"))])
+                    })
+                    .contentShape(Capsule())
+                    .onTapGesture { choose(index) }
+                    .accessibilityElement()
+                    .accessibilityLabel(option.title)
+                    .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+                    .accessibilityAction { choose(index) }
+            }
+        }
+        .padding(3)
+        .background(Capsule().fill(Theme.muted.opacity(0.14)))
+        .coordinateSpace(name: "sliding")
+        .onPreferenceChange(SegmentFrames.self) { value in
+            MainActor.assumeIsolated { frames = value }
+        }
+        .gesture(DragGesture(minimumDistance: 2, coordinateSpace: .named("sliding")).onChanged { drag in
+            if let index = frames.first(where: { $0.value.minX <= drag.location.x && drag.location.x < $0.value.maxX })?.key {
+                choose(index)
+            }
+        })
+        .opacity(enabled ? 1 : 0.45)
+    }
+
+    @ViewBuilder
+    private var thumb: some View {
+        if #available(macOS 26, *) {
+            Capsule().fill(Theme.surface.opacity(0.6)).glassEffect(.regular.interactive(), in: Capsule())
+        } else {
+            Capsule().fill(Theme.surface).shadow(color: .black.opacity(0.12), radius: 2, y: 1)
+        }
+    }
+
+    private func choose(_ index: Int) {
+        guard enabled, options.indices.contains(index), options[index].value != selection else { return }
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.82)) { selection = options[index].value }
+    }
+}
+
+private struct SegmentFrames: PreferenceKey {
+    static let defaultValue: [Int: CGRect] = [:]
+    static func reduce(value: inout [Int: CGRect], nextValue: () -> [Int: CGRect]) {
+        value.merge(nextValue()) { $1 }
     }
 }

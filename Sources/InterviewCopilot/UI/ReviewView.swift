@@ -225,13 +225,7 @@ private struct SessionDetailView: View {
                     .frame(minWidth: 300, idealWidth: 380, maxHeight: .infinity)
                     .background(Theme.paper.opacity(0.5))
                 VStack(alignment: .leading, spacing: 10) {
-                    Picker("", selection: $tab) {
-                        Text(L("纪要")).tag(0)
-                        Text(L("问答 %@", "\(model.qa.count)")).tag(1)
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                    .frame(width: 200)
+                    SlidingPicker(selection: $tab, options: [(0, L("纪要")), (1, L("问答 %@", "\(model.qa.count)"))])
                     ScrollView {
                         if tab == 0 { summaryView } else { qaView }
                     }

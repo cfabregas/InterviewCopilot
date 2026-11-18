@@ -49,7 +49,7 @@ struct MockInterviewView: View {
                         .buttonStyle(PrimaryButtonStyle(large: true))
                         .keyboardShortcut(.defaultAction)
                     Button(L("管理简历和岗位描述")) { navigator.page = .resume }
-                        .buttonStyle(QuietButtonStyle())
+                        .buttonStyle(QuietButtonStyle(large: true))
                     if !mock.status.isEmpty {
                         Text(mock.status).font(.system(size: 13)).foregroundStyle(Theme.cue)
                     }
@@ -63,11 +63,7 @@ struct MockInterviewView: View {
                 SectionRule(title: L("这一场怎么面")).padding(.bottom, 8)
                 VStack(spacing: 0) {
                 field(L("面试语言")) {
-                    Picker("", selection: $mock.config.chinese) {
-                        Text(L("英文")).tag(false)
-                        Text(L("中文")).tag(true)
-                    }
-                    .labelsHidden().pickerStyle(.segmented).frame(width: 160)
+                    SlidingPicker(selection: $mock.config.chinese, options: [(false, L("英文")), (true, L("中文"))])
                 }
                 field(L("岗位级别")) {
                     Picker("", selection: $mock.config.level) {
@@ -154,10 +150,10 @@ struct MockInterviewView: View {
                     case .answering:
                         Button(L("答完了")) { mock.finishAnswer() }
                             .buttonStyle(PrimaryButtonStyle(large: true)).keyboardShortcut(.defaultAction)
-                        Button(L("重听问题")) { mock.repeatQuestion() }.buttonStyle(QuietButtonStyle())
-                        Button(L("跳过这题")) { mock.skip() }.buttonStyle(QuietButtonStyle())
+                        Button(L("重听问题")) { mock.repeatQuestion() }.buttonStyle(QuietButtonStyle(large: true))
+                        Button(L("跳过这题")) { mock.skip() }.buttonStyle(QuietButtonStyle(large: true))
                     case .asking:
-                        Button(L("跳过这题")) { mock.skip() }.buttonStyle(QuietButtonStyle())
+                        Button(L("跳过这题")) { mock.skip() }.buttonStyle(QuietButtonStyle(large: true))
                     case .waiting:
                         Button(L("继续")) { mock.proceed() }
                             .buttonStyle(PrimaryButtonStyle(large: true)).keyboardShortcut(.defaultAction)
@@ -166,7 +162,7 @@ struct MockInterviewView: View {
                             Button(L("打开复盘")) { openReview(mock.sessionID) }
                                 .buttonStyle(PrimaryButtonStyle(large: true)).keyboardShortcut(.defaultAction)
                         }
-                        Button(L("再来一场")) { mock.reset() }.buttonStyle(QuietButtonStyle())
+                        Button(L("再来一场")) { mock.reset() }.buttonStyle(QuietButtonStyle(large: true))
                     default:
                         EmptyView()
                     }
