@@ -300,9 +300,9 @@ struct LanguageSwapControl: View {
         Button(action: swap) {
             HStack(spacing: 10) {
                 label(L("英文"), active: forward)
-                VStack(spacing: 1) {
-                    arrow("arrow.right", lit: forward)
-                    arrow("arrow.left", lit: !forward)
+                VStack(spacing: 4) {
+                    harpoon(.right, lit: forward)
+                    harpoon(.left, lit: !forward)
                 }
                 label(L("中文"), active: !forward)
             }
@@ -326,15 +326,37 @@ struct LanguageSwapControl: View {
             .fixedSize()
     }
 
-    private func arrow(_ name: String, lit: Bool) -> some View {
-        Image(systemName: name)
-            .font(.system(size: 10, weight: .bold))
-            .foregroundStyle(lit && enabled ? Theme.accent : Theme.muted.opacity(0.35))
+    private func harpoon(_ direction: Harpoon.Direction, lit: Bool) -> some View {
+        Harpoon(direction: direction)
+            .stroke(lit && enabled ? Theme.accent : Theme.muted.opacity(0.3),
+                    style: StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
+            .frame(width: 18, height: 5)
     }
 
     private func swap() {
         withAnimation(.easeInOut(duration: 0.2)) {
             mode = forward ? .zhToEn : .enToZh
         }
+    }
+}
+
+/// 只有一侧倒钩的半箭头（⇌ 那种）：朝右的倒钩在上，朝左的倒钩在下，两支叠起来像一对互换箭头。
+struct Harpoon: Shape {
+    enum Direction { case left, right }
+    var direction: Direction
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        switch direction {
+        case .right:
+            path.move(to: CGPoint(x: rect.minX, y: rect.maxY))
+            path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+            path.addLine(to: CGPoint(x: rect.maxX - rect.height * 1.2, y: rect.minY))
+        case .left:
+            path.move(to: CGPoint(x: rect.maxX, y: rect.minY))
+            path.addLine(to: CGPoint(x: rect.minX, y: rect.minY))
+            path.addLine(to: CGPoint(x: rect.minX + rect.height * 1.2, y: rect.maxY))
+        }
+        return path
     }
 }
