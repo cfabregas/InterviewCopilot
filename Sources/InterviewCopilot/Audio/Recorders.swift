@@ -28,7 +28,51 @@ final class AudioFileRecorder {
     }
 }
 
-/// 麦克风只录音不处理：回声消除和转写放到会后。
+/// 麦克风输入的公共处理：打开系统的语音处理(和 FaceTime 一样的回声消除)，并把输入整理成单声道。
+/// 系统会把扬声器正在播放的声音从麦克风里减掉，外放听对方说话时，录音里不会再混进对方的声音。
+/// 注意：同一次运行里一旦有录音开过语音处理，之后不开的录音会拿不到声音，所以所有用麦克风的地方都走这里。
+enum VoiceInput {
+    /// 打开回声消除，返回是否成功(设备不支持时退回普通录音)
+    static func enableEchoCancellation(_ engine: AVAudioEngine) -> Bool {
+        let input = engine.inputNode
+        // 模拟面试自测靠外放的系统语音代替人作答，开了回声消除就录不到了
+        let arguments = CommandLine.arguments
+        if arguments.contains("--mock-test"), !arguments.contains("--scripted") {
+            Log.write("模拟面试自测：不开回声消除，好让麦克风录到外放的回答")
+            return false
+        }
+        do {
+            try input.setVoiceProcessingEnabled(true)
+        } catch {
+            Log.write("麦克风回声消除开启失败，改为普通录音：\(error)")
+            return false
+        }
+        // 只要回声消除：不自动调音量，也尽量不压低会议软件等其他声音
+        input.isVoiceProcessingAGCEnabled = false
+        input.voiceProcessingOtherAudioDuckingConfiguration =
+            AVAudioVoiceProcessingOtherAudioDuckingConfiguration(enableAdvancedDucking: false, duckingLevel: .min)
+        // 语音处理要求输出端也接上，才能拿到扬声器的声音作参考
+        _ = engine.outputNode
+        return true
+    }
+
+    /// 和输入同采样率的单声道格式
+    static func monoFormat(for format: AVAudioFormat) -> AVAudioFormat? {
+        AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: format.sampleRate, channels: 1, interleaved: false)
+    }
+
+    /// 开了语音处理后输入是多声道，处理过的人声在第一个声道；取出来变成单声道
+    static func mono(_ buffer: AVAudioPCMBuffer, format: AVAudioFormat) -> AVAudioPCMBuffer? {
+        guard let source = buffer.floatChannelData,
+              let copy = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: buffer.frameLength),
+              let target = copy.floatChannelData else { return nil }
+        copy.frameLength = buffer.frameLength
+        target[0].update(from: source[0], count: Int(buffer.frameLength))
+        return copy
+    }
+}
+
+/// 麦克风录音，默认开回声消除
 final class MicRecorder {
     private let engine = AVAudioEngine()
     private var recorder: AudioFileRecorder?
@@ -38,19 +82,21 @@ final class MicRecorder {
         await AVCaptureDevice.requestAccess(for: .audio)
     }
 
-    func start(url: URL) throws {
+    func start(url: URL, voiceProcessing: Bool = true) throws {
+        let echoCancelled = voiceProcessing && VoiceInput.enableEchoCancellation(engine)
         let input = engine.inputNode
         let format = input.outputFormat(forBus: 0)
-        guard format.sampleRate > 0, format.channelCount > 0 else {
+        guard format.sampleRate > 0, format.channelCount > 0, let mono = VoiceInput.monoFormat(for: format) else {
             throw AppError("没有可用的麦克风输入")
         }
-        let recorder = try AudioFileRecorder(url: url, format: format)
+        let recorder = try AudioFileRecorder(url: url, format: mono)
         self.recorder = recorder
         input.installTap(onBus: 0, bufferSize: 4096, format: format) { buffer, _ in
-            recorder.write(buffer)
+            if let copy = VoiceInput.mono(buffer, format: mono) { recorder.write(copy) }
         }
         try engine.start()
         startedAt = Date()
+        Log.write("麦克风录音已启动：\(Int(format.sampleRate)) Hz，\(format.channelCount) 声道，回声消除\(echoCancelled ? "已开启" : "未开启")")
     }
 
     func stop() {

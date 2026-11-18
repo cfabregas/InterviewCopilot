@@ -99,6 +99,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         // 调试用：让悬浮窗出现在截屏里，方便检查布局
         if CommandLine.arguments.contains("--visible-in-capture") { settings.hideFromSharing = false }
 
+        // 自测：外放一段语音，分别在开、关回声消除时录麦克风，比较录进去的音量
+        if let arg = CommandLine.arguments.first(where: { $0.hasPrefix("--echo-test=") }) {
+            Task { await runEchoTest(URL(fileURLWithPath: String(arg.dropFirst(12)))) }
+        }
         if CommandLine.arguments.contains("--autotest") {
             Task { await runAutotest() }
         }
@@ -206,6 +210,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             try? await Task.sleep(nanoseconds: 500_000_000)
             NSApp.terminate(nil)
         }
+    }
+
+    private func runEchoTest(_ dir: URL) async {
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let text = "Thanks for joining us today. Could you start by telling me about a challenging project you worked on recently?"
+        var results: [String] = []
+        for on in [false, true] {
+            let url = dir.appendingPathComponent(on ? "mic-aec.m4a" : "mic-plain.m4a")
+            let recorder = MicRecorder()
+            do { try recorder.start(url: url, voiceProcessing: on) } catch { Log.write("回声自测录音失败：\(error)"); return }
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                let say = Process()
+                say.executableURL = URL(fileURLWithPath: "/usr/bin/say")
+                say.arguments = ["-v", "Daniel", text]
+                say.terminationHandler = { _ in continuation.resume() }
+                do { try say.run() } catch { continuation.resume() }
+            }
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            recorder.stop()
+            results.append("\(on ? "开回声消除" : "关回声消除")：\(Self.loudness(url))")
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+        }
+        Log.write("回声自测：" + results.joined(separator: "；"))
+        NSApp.terminate(nil)
+    }
+
+    /// 整段录音的平均音量和最响 1 秒的音量(dBFS)
+    private static func loudness(_ url: URL) -> String {
+        guard let file = try? AVAudioFile(forReading: url),
+              let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(file.length)),
+              (try? file.read(into: buffer)) != nil, let data = buffer.floatChannelData else { return "读不了" }
+        let samples = Array(UnsafeBufferPointer(start: data[0], count: Int(buffer.frameLength)))
+        func db(_ x: ArraySlice<Float>) -> Double { 20 * log10(Double(sqrt(x.reduce(0) { $0 + $1 * $1 } / Float(max(x.count, 1)))) + 1e-9) }
+        let second = Int(file.processingFormat.sampleRate)
+        let loudest = stride(from: 0, to: max(samples.count - second, 1), by: second / 4).map { db(samples[$0..<min($0 + second, samples.count)]) }.max() ?? -120
+        return String(format: "平均 %.1f dB，最响 1 秒 %.1f dB", db(samples[...]), loudest)
     }
 
     /// 自测：把一个目录里的 system.m4a / mic.m4a 当作一场刚结束的面试，跑一遍会后处理

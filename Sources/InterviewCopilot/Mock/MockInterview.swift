@@ -403,15 +403,21 @@ final class MockInterview: ObservableObject {
             for await event in asr.events { self?.handle(event) }
         }
 
+        // 开回声消除：面试官的提问是外放的，不戴耳机时也不会被麦克风录进去
+        let echoCancelled = VoiceInput.enableEchoCancellation(engine)
         let input = engine.inputNode
         let format = input.outputFormat(forBus: 0)
-        guard format.sampleRate > 0, format.channelCount > 0 else { throw AppError(L("没有可用的麦克风输入")) }
-        let recorder = try AudioFileRecorder(url: dir.appendingPathComponent("mic.m4a"), format: format)
+        guard format.sampleRate > 0, format.channelCount > 0, let mono = VoiceInput.monoFormat(for: format) else {
+            throw AppError(L("没有可用的麦克风输入"))
+        }
+        let recorder = try AudioFileRecorder(url: dir.appendingPathComponent("mic.m4a"), format: mono)
         self.recorder = recorder
         input.installTap(onBus: 0, bufferSize: 4096, format: format) { buffer, _ in
-            recorder.write(buffer)
-            asr.feed(buffer)
+            guard let copy = VoiceInput.mono(buffer, format: mono) else { return }
+            recorder.write(copy)
+            asr.feed(copy)
         }
+        Log.write("模拟面试麦克风：\(Int(format.sampleRate)) Hz，回声消除\(echoCancelled ? "已开启" : "未开启")")
         try engine.start()
         startedAt = Date()
 
