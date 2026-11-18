@@ -33,10 +33,12 @@ final class L10n: ObservableObject {
     private var table: [String: String] = [:]
 
     private init() {
-        choice = UserDefaults.standard.string(forKey: Self.defaultsKey) ?? ""
+        var initial = UserDefaults.standard.string(forKey: Self.defaultsKey) ?? ""
         for argument in CommandLine.arguments where argument.hasPrefix("--lang=") {
-            choice = String(argument.dropFirst(7))   // 调试用：只在本次运行里换语言
+            initial = String(argument.dropFirst(7))   // 调试用：只在本次运行里换语言，不写进偏好设置
         }
+        // 直接设底层存储，不触发 didSet，否则调试参数会被当成用户的选择保存下来
+        _choice = Published(initialValue: initial)
         load()
         resolve()
     }

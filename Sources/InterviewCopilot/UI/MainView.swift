@@ -54,7 +54,8 @@ struct MainView: View {
     var body: some View {
         NavigationSplitView {
             sidebar
-                .navigationSplitViewColumnWidth(L10n.shared.isSource ? 200 : 220)
+                .frame(minWidth: L10n.shared.isSource ? 180 : 220)
+                .navigationSplitViewColumnWidth(min: L10n.shared.isSource ? 180 : 220, ideal: L10n.shared.isSource ? 200 : 230, max: 300)
                 .toolbar(removing: .sidebarToggle)
         } detail: {
             Group {
@@ -99,6 +100,7 @@ struct MainView: View {
                 ForEach([Page.listen, .mock, .review, .resume]) { row($0) }
             } header: {
                 Text(L("千人千面")).font(.system(size: 22, weight: .bold)).foregroundStyle(Theme.ink)
+                    .lineLimit(1).minimumScaleFactor(0.6)
                     .padding(.bottom, 10)
             }
             .collapsible(false)

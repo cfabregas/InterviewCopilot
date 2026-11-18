@@ -97,7 +97,13 @@ struct ListenPage: View {
             Rectangle().fill(Theme.line).frame(height: 1)
 
             HStack(spacing: 16) {
-                SlidingPicker(selection: $controller.mode, options: LanguageMode.allCases.map { ($0, $0.title) })
+                Picker("", selection: $controller.mode) {
+                    ForEach(LanguageMode.allCases) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .controlSize(.large)
+                .fixedSize()
                 .disabled(controller.isRunning || controller.isBusy)
 
                 Toggle(L("实时答案"), isOn: $answers.enabled)

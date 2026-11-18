@@ -63,7 +63,14 @@ struct MockInterviewView: View {
                 SectionRule(title: L("这一场怎么面")).padding(.bottom, 8)
                 VStack(spacing: 0) {
                 field(L("面试语言")) {
-                    SlidingPicker(selection: $mock.config.chinese, options: [(false, L("英文")), (true, L("中文"))])
+                    Picker("", selection: $mock.config.chinese) {
+                    Text(L("英文")).tag(false)
+                    Text(L("中文")).tag(true)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .controlSize(.large)
+                .fixedSize()
                 }
                 field(L("岗位级别")) {
                     Picker("", selection: $mock.config.level) {

@@ -225,7 +225,14 @@ private struct SessionDetailView: View {
                     .frame(minWidth: 300, idealWidth: 380, maxHeight: .infinity)
                     .background(Theme.paper.opacity(0.5))
                 VStack(alignment: .leading, spacing: 10) {
-                    SlidingPicker(selection: $tab, options: [(0, L("纪要")), (1, L("问答 %@", "\(model.qa.count)"))])
+                    Picker("", selection: $tab) {
+                    Text(L("纪要")).tag(0)
+                    Text(L("问答 %@", "\(model.qa.count)")).tag(1)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .controlSize(.large)
+                .fixedSize()
                     ScrollView {
                         if tab == 0 { summaryView } else { qaView }
                     }
@@ -271,7 +278,9 @@ private struct SessionDetailView: View {
                         model.reload()
                     }
                     .help(L("点击可以修改标题，回车保存"))
-                Spacer()
+                    .lineLimit(1)
+                    .layoutPriority(-1)
+                Spacer(minLength: 8)
                 Button(allDone ? L("重新处理") : (model.jobs.isEmpty ? L("开始处理") : L("继续处理"))) {
                     Task { await post.process(session.id, force: allDone) }
                 }
@@ -290,31 +299,29 @@ private struct SessionDetailView: View {
                     .disabled(isProcessing)
             }
 
-            HStack(spacing: 14) {
-                Text(ReviewView.subtitle(session) + L("，") + session.mode.title)
-                    .font(.system(size: 12).monospacedDigit()).foregroundStyle(Theme.muted).fixedSize()
-                if isProcessing {
+            Text(ReviewView.subtitle(session) + L("，") + session.mode.title)
+                .font(.system(size: 12).monospacedDigit()).foregroundStyle(Theme.muted).lineLimit(1)
+            if isProcessing {
+                HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
-                    Text(L("正在处理：%@", "\(post.stage)")).font(.system(size: 12)).foregroundStyle(Theme.ink)
-                } else {
-                    // 四个步骤连成一条线：做完的是实心点
-                    HStack(spacing: 0) {
-                        ForEach(Array(PostTask.allCases.enumerated()), id: \.offset) { index, task in
-                            let state = model.jobs[task]
-                            if index > 0 { Rectangle().fill(Theme.line).frame(width: 18, height: 1).padding(.horizontal, 6) }
-                            HStack(spacing: 5) {
-                                Circle()
-                                    .fill(state?.status == "done" ? Theme.good : (state?.status == "failed" ? Theme.live : .clear))
-                                    .overlay(Circle().strokeBorder(Self.color(state?.status)))
-                                    .frame(width: 8, height: 8)
-                                Text(task.title).font(.system(size: 12)).foregroundStyle(state == nil ? Theme.muted : Theme.ink)
-                                    .fixedSize()
-                            }
-                            .help(state?.detail ?? L("还没有处理"))
+                    Text(L("正在处理：%@", "\(post.stage)")).font(.system(size: 12)).foregroundStyle(Theme.ink).lineLimit(1)
+                }
+            } else {
+                // 四个步骤连成一条线：做完的是实心点；窗口窄或者英文较长时换行
+                FlowLayout(spacing: 6) {
+                    ForEach(Array(PostTask.allCases.enumerated()), id: \.offset) { index, task in
+                        let state = model.jobs[task]
+                        HStack(spacing: 6) {
+                            if index > 0 { Rectangle().fill(Theme.line).frame(width: 18, height: 1) }
+                            Circle()
+                                .fill(state?.status == "done" ? Theme.good : (state?.status == "failed" ? Theme.live : .clear))
+                                .overlay(Circle().strokeBorder(Self.color(state?.status)))
+                                .frame(width: 8, height: 8)
+                            Text(task.title).font(.system(size: 12)).foregroundStyle(state == nil ? Theme.muted : Theme.ink)
                         }
+                        .help(state?.detail ?? L("还没有处理"))
                     }
                 }
-                Spacer()
             }
             if !model.processed, !isProcessing {
                 Text(L("下面是面试当时的实时记录。点\"开始处理\"会重新转写、区分说话人、翻译全文，并生成问答评价和纪要。"))
