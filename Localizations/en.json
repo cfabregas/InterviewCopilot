@@ -336,5 +336,6 @@
   "发现更新的千问版本，可以在下面选择。": "A newer Qwen version is available. Pick it below.",
   "没有发现比当前更新的千问版本。": "No newer Qwen version found.",
   "逐个试调版本号不低于当前的通义千问模型，以及 DeepSeek 和 Kimi 的最新版本，只列出这个账号现在能调通的。首字延迟是单次测量，会有波动。": "Tries every Qwen model at or above your current version, plus the latest DeepSeek and Kimi versions, and lists only the ones this account can call now. First-token latency is a single measurement and varies.",
-  "时间轴": "Timeline"
+  "时间轴": "Timeline",
+  "互换翻译方向": "Swap translation direction"
 }

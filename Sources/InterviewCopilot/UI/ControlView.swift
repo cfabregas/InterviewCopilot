@@ -102,8 +102,8 @@ struct ListenPage: View {
             Rectangle().fill(Theme.line).frame(height: 1)
 
             HStack(spacing: 16) {
-                SlidingPicker(selection: $controller.mode, options: LanguageMode.allCases.map { ($0, $0.title) })
-                .disabled(controller.isRunning || controller.isBusy)
+                LanguageSwapControl(mode: $controller.mode)
+                    .disabled(controller.isRunning || controller.isBusy)
 
                 Toggle(L("实时答案"), isOn: $answers.enabled)
                     .toggleStyle(.switch)
@@ -285,6 +285,52 @@ private struct TranslationDownload: ViewModifier {
                         Log.write("翻译语言包下载未完成：\(error)")
                     }
                 }
+        }
+    }
+}
+
+/// 翻译方向：「源语言 ⇄ 目标语言」，点中间的箭头或任一侧都能互换。
+struct LanguageSwapControl: View {
+    @Binding var mode: LanguageMode
+    @Environment(\.isEnabled) private var enabled
+    @Namespace private var space
+
+    private var source: String { mode == .enToZh ? L("英文") : L("中文") }
+    private var target: String { mode == .enToZh ? L("中文") : L("英文") }
+
+    var body: some View {
+        Button(action: swap) {
+            HStack(spacing: 10) {
+                label(source, id: mode == .enToZh ? "en" : "zh")
+                Image(systemName: "arrow.left.arrow.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(enabled ? Theme.accent : Theme.muted)
+                    .rotationEffect(.degrees(mode == .enToZh ? 0 : 180))
+                label(target, id: mode == .enToZh ? "zh" : "en")
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 8)
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .capsuleGlass()
+        .opacity(enabled ? 1 : 0.6)
+        .help(L("互换翻译方向"))
+        .accessibilityLabel(mode.title)
+        .accessibilityHint(L("互换翻译方向"))
+    }
+
+    private func label(_ text: String, id: String) -> some View {
+        Text(text)
+            .font(.system(size: 14, weight: .medium))
+            .foregroundStyle(Theme.ink)
+            .fixedSize()
+            .matchedGeometryEffect(id: id, in: space)
+    }
+
+    private func swap() {
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+            mode = mode == .enToZh ? .zhToEn : .enToZh
         }
     }
 }
