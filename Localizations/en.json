@@ -349,5 +349,14 @@
   "点这里下载": "Click to download",
   "忽略这个版本": "Skip this version",
   "打开下载页": "Open the download page",
-  "检查更新…": "Check for Updates…"
+  "检查更新…": "Check for Updates…",
+  "自动(正在检测回声…)": "Auto (checking for echo…)",
+  "自动": "Auto",
+  "自动(判断不了，两条一起放)": "Auto (can't tell, playing both)",
+  "自动(检测到外放，只放麦克风)": "Auto (speakers detected, mic only)",
+  "自动(没有回声，两条一起放)": "Auto (no echo, playing both)",
+  "回放方式": "Playback",
+  "只放麦克风": "Mic only",
+  "两条一起": "Both tracks",
+  "外放时麦克风里已经录到了对方的声音，只放麦克风就不会有回声": "When you used speakers, the mic already recorded the other side, so playing the mic alone avoids the echo."
 }

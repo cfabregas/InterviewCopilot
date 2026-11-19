@@ -96,6 +96,9 @@ final class Store {
         """, nil, nil, nil)
         // 老数据库没有标题列；已经有了时这句会失败，忽略即可
         sqlite3_exec(db, "ALTER TABLE session ADD COLUMN title TEXT", nil, nil, nil)
+        // 回声检测结果(-1 表示判断不了)和用户选的回放方式(mic、both，空表示自动)
+        sqlite3_exec(db, "ALTER TABLE session ADD COLUMN echo_score REAL", nil, nil, nil)
+        sqlite3_exec(db, "ALTER TABLE session ADD COLUMN playback TEXT", nil, nil, nil)
     }
 
     deinit { sqlite3_close(db) }

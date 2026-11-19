@@ -12,6 +12,21 @@ struct SessionInfo: Identifiable, Hashable {
     var systemStart: Double?
     var micStart: Double?
     var segmentCount: Int
+    /// 回声检测：两条录音的相似程度，-1 表示判断不了，nil 表示还没检测
+    var echoScore: Double? = nil
+    /// 用户选的回放方式：mic 只放麦克风，both 两条一起，nil 自动
+    var playback: String? = nil
+
+    /// 检测到外放回声
+    var hasEcho: Bool { (echoScore ?? 0) >= EchoDetector.threshold }
+    /// 回放时只放麦克风：用户选过就按用户的，否则有回声时只放麦克风
+    var micOnlyPlayback: Bool {
+        switch playback {
+        case "mic": return true
+        case "both": return false
+        default: return hasEcho
+        }
+    }
 
     var micOffsetMs: Int {
         guard let systemStart, let micStart else { return 0 }
@@ -89,11 +104,21 @@ extension Store {
                         title: row["title"] as? String ?? "",
                         systemStart: row["system_audio_started_at"] as? Double,
                         micStart: row["mic_audio_started_at"] as? Double,
-                        segmentCount: int(row["segment_count"]))
+                        segmentCount: int(row["segment_count"]),
+                        echoScore: row["echo_score"] as? Double,
+                        playback: row["playback"] as? String)
         }
     }
 
     func session(_ id: Int64) -> SessionInfo? { sessions().first { $0.id == id } }
+
+    func setEchoScore(session: Int64, score: Double) {
+        run("UPDATE session SET echo_score = ? WHERE id = ?", [score, session])
+    }
+
+    func setPlayback(session: Int64, mode: String?) {
+        run("UPDATE session SET playback = ? WHERE id = ?", [mode, session])
+    }
 
     func setTitle(session: Int64, title: String) {
         run("UPDATE session SET title = ? WHERE id = ?", [title, session])

@@ -1,12 +1,15 @@
 import AVFoundation
 import SwiftUI
 
-/// 同时播放系统声音和麦克风两份录音，按各自开始录的时刻对齐
+/// 同时播放系统声音和麦克风两份录音，按各自开始录的时刻对齐。
+/// 外放时麦克风里已经有对方的声音，再叠上系统声音会听到回声，这时可以只放麦克风。
 @MainActor
 final class DualPlayer: ObservableObject {
     @Published private(set) var isPlaying = false
     @Published private(set) var currentMs = 0
     @Published private(set) var durationMs = 0
+    /// 只放麦克风(系统声音静音)
+    @Published private(set) var micOnly = false
 
     private var system: AVPlayer?
     private var mic: AVPlayer?
@@ -29,6 +32,7 @@ final class DualPlayer: ObservableObject {
             mic = AVPlayer(url: session.micFile)
             micOffsetMs = session.micOffsetMs
         }
+        setMicOnly(session.micOnlyPlayback)
         observer = player.addPeriodicTimeObserver(forInterval: CMTime(value: 1, timescale: 4), queue: .main) { [weak self] time in
             let ms = Int(CMTimeGetSeconds(time) * 1000)
             Task { @MainActor in
@@ -40,6 +44,13 @@ final class DualPlayer: ObservableObject {
     }
 
     var available: Bool { system != nil }
+    var hasMic: Bool { mic != nil }
+
+    func setMicOnly(_ on: Bool) {
+        micOnly = on && mic != nil
+        // 系统声音那条照常走(进度靠它)，只是静音
+        system?.volume = micOnly ? 0 : 1
+    }
 
     func play(fromMs ms: Int) {
         guard let system else { return }
@@ -79,6 +90,8 @@ final class ReviewModel: ObservableObject {
     @Published private(set) var jobs: [PostTask: JobState] = [:]
     /// 显示的是会后处理过的结果，还是会中的实时记录
     @Published private(set) var processed = false
+    /// 正在给选中的这场做回声检测
+    @Published private(set) var detectingEcho = false
     let player = DualPlayer()
 
     var selected: SessionInfo? { sessions.first { $0.id == selectedID } }
@@ -92,10 +105,15 @@ final class ReviewModel: ObservableObject {
         if selectedID == nil || selected == nil { selectedID = sessions.first?.id }
         // 选中的会话是在列表加载前就指定的：这时录音还没装进播放器
         loadDetail(resetPlayer: !player.available)
+        // 面试刚结束时列表里的这场可能还没有结束时间，重新加载时再补检
+        detectEchoIfNeeded()
     }
 
     private func loadDetail(resetPlayer: Bool) {
-        if resetPlayer { player.load(selected) }
+        if resetPlayer {
+            player.load(selected)
+            detectEchoIfNeeded()
+        }
         guard let store = Store.shared, let id = selectedID else {
             utterances = []; qa = []; summary = ""; jobs = [:]
             return
@@ -107,6 +125,37 @@ final class ReviewModel: ObservableObject {
         qa = items.isEmpty ? store.realtimeQA(session: id) : items
         summary = store.summary(session: id)
         jobs = store.jobs(session: id)
+    }
+
+    /// 回放方式：mic 只放麦克风，both 两条一起，nil 自动(按回声检测结果)
+    func setPlayback(_ mode: String?) {
+        guard let id = selectedID else { return }
+        Store.shared?.setPlayback(session: id, mode: mode)
+        refreshSessions()
+    }
+
+    /// 没检测过的面试(包括以前的记录)打开时检测一次，结果存起来
+    private func detectEchoIfNeeded() {
+        guard let session = selected, session.echoScore == nil, session.endedAt != nil, !detectingEcho,
+              FileManager.default.fileExists(atPath: session.systemFile.path),
+              FileManager.default.fileExists(atPath: session.micFile.path) else { return }
+        detectingEcho = true
+        Task {
+            let result = await Task.detached(priority: .utility) {
+                EchoDetector.analyze(system: session.systemFile, mic: session.micFile, micOffsetMs: session.micOffsetMs)
+            }.value
+            detectingEcho = false
+            Store.shared?.setEchoScore(session: session.id, score: result?.score ?? -1)
+            Log.write(result.map { String(format: "回声检测：相似度 %.2f，%@", $0.score, $0.hasEcho ? "外放，回放时只放麦克风" : "没有明显回声") }
+                      ?? "回声检测：系统声音太少，判断不了")
+            refreshSessions()
+        }
+    }
+
+    /// 只刷新列表里的会话信息(回放方式、检测结果)，不重新装载录音
+    private func refreshSessions() {
+        sessions = Store.shared?.sessions() ?? []
+        if let selected { player.setMicOnly(selected.micOnlyPlayback) }
     }
 
     func delete(_ session: SessionInfo) {
@@ -331,6 +380,35 @@ private struct SessionDetailView: View {
 
     // MARK: 时间轴
 
+    /// 回放方式：自动 / 只放麦克风 / 两条一起
+    private var playbackMenu: some View {
+        let current = model.selected ?? session
+        let auto: String = {
+            if model.detectingEcho { return L("自动(正在检测回声…)") }
+            guard let score = current.echoScore else { return L("自动") }
+            if score < 0 { return L("自动(判断不了，两条一起放)") }
+            return current.hasEcho ? L("自动(检测到外放，只放麦克风)") : L("自动(没有回声，两条一起放)")
+        }()
+        return Menu {
+            Picker(L("回放方式"), selection: Binding(get: { current.playback ?? "auto" },
+                                                   set: { model.setPlayback($0 == "auto" ? nil : $0) })) {
+                Text(auto).tag("auto")
+                Text(L("只放麦克风")).tag("mic")
+                Text(L("两条一起")).tag("both")
+            }
+            .pickerStyle(.inline)
+            .labelsHidden()
+        } label: {
+            Label(player.micOnly ? L("只放麦克风") : L("两条一起"),
+                  systemImage: player.micOnly ? "mic" : "speaker.wave.2")
+                .font(.system(size: 11))
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .foregroundStyle(Theme.muted)
+        .help(L("外放时麦克风里已经录到了对方的声音，只放麦克风就不会有回声"))
+    }
+
     private var timeline: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
@@ -352,6 +430,7 @@ private struct SessionDetailView: View {
                     .disabled(!player.available)
                 Text("\(Exporter.clock(player.currentMs)) / \(Exporter.clock(player.durationMs))")
                     .font(.system(size: 11).monospacedDigit()).foregroundStyle(Theme.muted)
+                if player.available && player.hasMic { playbackMenu }
             }
             if !player.available {
                 Text(L("这场面试没有录音文件")).font(.system(size: 12)).foregroundStyle(Theme.muted)

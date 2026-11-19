@@ -107,6 +107,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if let arg = CommandLine.arguments.first(where: { $0.hasPrefix("--echo-test=") }) {
             Task { await runEchoTest(URL(fileURLWithPath: String(arg.dropFirst(12)))) }
         }
+        if CommandLine.arguments.contains("--echo-scan") {
+            Task.detached {
+                // 只读：对每场面试跑一遍回声检测，结果写进日志
+                for session in await MainActor.run(body: { Store.shared?.sessions() ?? [] }) {
+                    let started = Date()
+                    let result = EchoDetector.analyze(system: session.systemFile, mic: session.micFile, micOffsetMs: session.micOffsetMs)
+                    let text = result.map { String(format: "相关 %.2f，延迟 %d 毫秒，%@", $0.score, $0.lagMs, $0.hasEcho ? "外放" : "无回声") } ?? "判断不了"
+                    Log.write("回声检测 \(session.id) \(session.dir.lastPathComponent)(\(session.durationSeconds) 秒)：\(text)，用时 \(String(format: "%.1f", Date().timeIntervalSince(started))) 秒")
+                }
+                await MainActor.run { NSApp.terminate(nil) }
+            }
+        }
         if let arg = CommandLine.arguments.first(where: { $0.hasPrefix("--voice-test=") }) {
             Task { await runVoiceTest(URL(fileURLWithPath: String(arg.dropFirst(13)))) }
         }
