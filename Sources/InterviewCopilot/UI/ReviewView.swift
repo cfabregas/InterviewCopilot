@@ -258,6 +258,8 @@ private struct SessionDetailView: View {
     /// 0 时间轴，1 纪要，2 问答。--review-qa：调试用，打开时直接显示问答页
     @State private var tab = CommandLine.arguments.contains("--review-qa") ? 2 : 0
     @State private var confirmingDelete = false
+    /// 导出结果：成功时是文件位置，失败时是原因
+    @State private var exportResult: ExportResult?
     @State private var renaming: Utterance?
     @State private var newName = ""
 
@@ -289,6 +291,15 @@ private struct SessionDetailView: View {
         .confirmationDialog(L("删除这场面试的全部记录和录音？删除后无法恢复。"), isPresented: $confirmingDelete) {
             Button(L("删除"), role: .destructive) { model.delete(session) }
             Button(L("取消"), role: .cancel) {}
+        }
+        .alert(exportResult?.title ?? "", isPresented: Binding(get: { exportResult != nil }, set: { if !$0 { exportResult = nil } }), presenting: exportResult) { result in
+            if let url = result.url {
+                Button(L("在访达中显示")) { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+                Button(L("打开")) { NSWorkspace.shared.open(url) }
+            }
+            Button(L("好"), role: .cancel) {}
+        } message: { result in
+            Text(result.message)
         }
         .alert(L("修改说话人的名字"), isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
             TextField(L("名字"), text: $newName)
@@ -571,10 +582,21 @@ private struct SessionDetailView: View {
 
     // MARK: 导出
 
+    private struct ExportResult {
+        let url: URL?
+        let title: String
+        let message: String
+    }
+
     private func export(pdf: Bool) {
-        guard let store = Store.shared, let current = store.session(session.id) else { return }
+        guard let store = Store.shared, let current = store.session(session.id) else {
+            exportResult = ExportResult(url: nil, title: L("导出失败"), message: L("找不到这场面试的记录"))
+            return
+        }
         let markdown = Exporter.markdown(session: current, summary: model.summary, qa: model.qa, utterances: model.utterances)
         let panel = NSSavePanel()
+        panel.title = pdf ? L("导出 PDF") : L("导出 Markdown")
+        panel.directoryURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
         panel.nameFieldStringValue = current.displayTitle.replacingOccurrences(of: "/", with: "-") + (pdf ? ".pdf" : ".md")
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
@@ -584,8 +606,10 @@ private struct SessionDetailView: View {
                 try markdown.write(to: url, atomically: true, encoding: .utf8)
             }
             Log.write("已导出：\(url.path)")
+            exportResult = ExportResult(url: url, title: L("导出成功"), message: L("已保存到：%@", url.path))
         } catch {
             Log.write("导出失败：\(error)")
+            exportResult = ExportResult(url: nil, title: L("导出失败"), message: error.localizedDescription)
         }
     }
 
