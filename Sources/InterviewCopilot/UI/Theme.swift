@@ -217,6 +217,11 @@ extension View {
         }
     }
 
+    /// 轻提示：顶部一条玻璃胶囊，几秒后自动消失。全 app 统一用这一种
+    func toast(_ message: Binding<String?>, seconds: Double = 3) -> some View {
+        modifier(ToastModifier(message: message, seconds: seconds))
+    }
+
     /// 玻璃面板：放这一页最要紧的东西
     @ViewBuilder
     func stage(padding: CGFloat = 20) -> some View {
@@ -337,5 +342,47 @@ private struct SegmentFrames: PreferenceKey {
     static let defaultValue: [Int: CGRect] = [:]
     static func reduce(value: inout [Int: CGRect], nextValue: () -> [Int: CGRect]) {
         value.merge(nextValue()) { $1 }
+    }
+}
+
+private struct ToastModifier: ViewModifier {
+    @Binding var message: String?
+    let seconds: Double
+
+    func body(content: Content) -> some View {
+        content
+            .overlay(alignment: .top) {
+                if let message {
+                    Text(message)
+                        .font(.system(size: 12.5, weight: .medium))
+                        .foregroundStyle(Theme.ink)
+                        .lineLimit(1).truncationMode(.middle)
+                        .padding(.horizontal, 16).padding(.vertical, 9)
+                        .modifier(ToastGlass())
+                        .padding(.top, 12).padding(.horizontal, 40)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                        .allowsHitTesting(false)
+                        .task(id: message) {
+                            try? await Task.sleep(for: .seconds(seconds))
+                            if self.message == message { self.message = nil }
+                        }
+                }
+            }
+            .animation(.easeOut(duration: 0.2), value: message)
+    }
+}
+
+private struct ToastGlass: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 26, *) {
+            // 玻璃下面垫一层浅底，盖住标题和按钮时字也看得清
+            content
+                .background(Capsule().fill(Theme.surface.opacity(0.55)))
+                .glassEffect(.regular, in: Capsule())
+                .shadow(color: .black.opacity(0.12), radius: 10, y: 3)
+        } else {
+            content.background(Capsule().fill(.regularMaterial)).overlay(Capsule().strokeBorder(Theme.line))
+                .shadow(color: .black.opacity(0.12), radius: 10, y: 3)
+        }
     }
 }

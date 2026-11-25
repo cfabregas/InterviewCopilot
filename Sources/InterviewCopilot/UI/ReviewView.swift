@@ -290,20 +290,7 @@ private struct SessionDetailView: View {
             .frame(maxWidth: .infinity)
         }
         .onAppear { title = session.title }
-        .overlay(alignment: .bottom) {
-            if let toast {
-                Text(toast)
-                    .font(.system(size: 12.5, weight: .medium))
-                    .foregroundStyle(.white)
-                    .lineLimit(1).truncationMode(.middle)
-                    .padding(.horizontal, 16).padding(.vertical, 9)
-                    .background(Capsule().fill(Color.black.opacity(0.78)))
-                    .padding(.bottom, 28).padding(.horizontal, 40)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                    .allowsHitTesting(false)
-            }
-        }
-        .animation(.easeOut(duration: 0.2), value: toast)
+        .toast($toast)
         .confirmationDialog(L("删除这场面试的全部记录和录音？删除后无法恢复。"), isPresented: $confirmingDelete) {
             Button(L("删除"), role: .destructive) { model.delete(session) }
             Button(L("取消"), role: .cancel) {}
@@ -622,7 +609,6 @@ private struct SessionDetailView: View {
             Log.write("已导出：\(url.path)")
             let shown = url.path.replacingOccurrences(of: NSHomeDirectory(), with: "~")
             toast = L("已导出到 %@", shown)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { if toast == L("已导出到 %@", shown) { toast = nil } }
         } catch {
             Log.write("导出失败：\(error)")
             exportResult = ExportResult(url: nil, title: L("导出失败"), message: error.localizedDescription)
