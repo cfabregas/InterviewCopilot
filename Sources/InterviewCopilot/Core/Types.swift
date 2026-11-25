@@ -130,7 +130,6 @@ enum ASRLine: String, CaseIterable, Identifiable {
     case auto
     case local
     case aliyun
-    case deepgram
     case assemblyai
 
     var id: String { rawValue }
@@ -139,7 +138,6 @@ enum ASRLine: String, CaseIterable, Identifiable {
         switch self {
         case .auto: return L("自动(选最快的云端线路)")
         case .local: return L("本地(离线)")
-        case .deepgram: return L("海外：Deepgram")
         case .assemblyai: return L("海外：AssemblyAI")
         case .aliyun: return L("国内：阿里云百炼")
         }
@@ -153,7 +151,10 @@ enum ASRLine: String, CaseIterable, Identifiable {
         for argument in CommandLine.arguments where argument.hasPrefix("--line=") {
             if let line = ASRLine(rawValue: String(argument.dropFirst(7))) { return line }
         }
-        return ASRLine(rawValue: UserDefaults.standard.string(forKey: "asrLine") ?? "") ?? .aliyun
+        let saved = UserDefaults.standard.string(forKey: "asrLine") ?? ""
+        // Deepgram 线路已经去掉：以前选它的改用同为海外线路的 AssemblyAI
+        if saved == "deepgram" { return .assemblyai }
+        return ASRLine(rawValue: saved) ?? .aliyun
     }
 }
 

@@ -241,7 +241,6 @@ final class SessionController: ObservableObject {
 
     private func cloudProvider(_ line: ASRLine, key: String, terms: [String]) -> ASRProvider {
         switch line {
-        case .deepgram: return DeepgramASR(apiKey: key, terms: terms)
         case .assemblyai: return AssemblyAIASR(apiKey: key, terms: terms)
         default: return AliyunASR(apiKey: key)
         }

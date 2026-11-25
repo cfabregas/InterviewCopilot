@@ -57,7 +57,6 @@ private struct KeyRow: View {
     /// 各家申请和管理密钥的官网页面
     private static let sites: [String: String] = [
         "asr.aliyun": "https://bailian.console.aliyun.com/?tab=model#/api-key",
-        "asr.deepgram": "https://console.deepgram.com/",
         "asr.assemblyai": "https://www.assemblyai.com/dashboard/api-keys",
         "llm.claude": "https://console.anthropic.com/settings/keys",
     ]
@@ -114,11 +113,11 @@ private struct LinesSettings: View {
     @AppStorage("autoPostProcess") private var autoPost = true
     @State private var showingModelCheck = false
 
-    /// 当前转写线路要用到的密钥；自动线路会在填了密钥的云端线路里挑最快的，所以三个都列出来
+    /// 当前转写线路要用到的密钥；自动线路会在填了密钥的云端线路里挑最快的，所以都列出来
     private var asrKeyLines: [ASRLine] {
         switch controller.line {
         case .local: return []
-        case .auto: return [.aliyun, .deepgram, .assemblyai]
+        case .auto: return [.aliyun, .assemblyai]
         default: return [controller.line]
         }
     }
@@ -126,7 +125,6 @@ private struct LinesSettings: View {
     private func keyTitle(_ line: ASRLine) -> String {
         switch line {
         case .aliyun: return L("阿里云百炼")
-        case .deepgram: return "Deepgram"
         case .assemblyai: return "AssemblyAI"
         default: return line.title
         }
@@ -325,7 +323,7 @@ final class Checkup: ObservableObject {
         case .notDetermined: microphone = .warning(L("麦克风还没有授权：录制自己的发言和模拟面试都需要"))
         default: microphone = .failed(L("麦克风权限被拒绝：请在系统设置里允许千人千面"))
         }
-        let names = [(L("阿里云"), ASRLine.aliyun.keyAccount), ("Deepgram", ASRLine.deepgram.keyAccount),
+        let names = [(L("阿里云"), ASRLine.aliyun.keyAccount),
                      ("AssemblyAI", ASRLine.assemblyai.keyAccount), ("Anthropic", Optional(LLMLine.claude.keyAccount))]
         let filled = names.filter { $0.1.map(KeyStore.has) ?? false }.map(\.0)
         if filled.isEmpty {

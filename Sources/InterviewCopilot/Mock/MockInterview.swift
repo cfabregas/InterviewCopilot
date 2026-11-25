@@ -363,7 +363,7 @@ final class MockInterview: ObservableObject {
         let terms = Terms.load()
         let makeLocal: () -> ASRProvider = { LocalASR.make(terms: terms) }
         // 主窗口选了具体的云端线路就用它；选"自动"时中文优先阿里云，英文优先海外线路
-        var order: [ASRLine] = config.chinese ? [.aliyun, .assemblyai, .deepgram] : [.deepgram, .assemblyai, .aliyun]
+        var order: [ASRLine] = config.chinese ? [.aliyun, .assemblyai] : [.assemblyai, .aliyun]
         let chosen = asrLine()
         if chosen == .local { return makeLocal() }
         if chosen != .auto { order = [chosen] }
@@ -372,7 +372,6 @@ final class MockInterview: ObservableObject {
             Log.write("模拟面试转写线路：\(line.title)")
             return ResilientASR(name: line.title, makePrimary: {
                 switch line {
-                case .deepgram: return DeepgramASR(apiKey: key, terms: terms)
                 case .assemblyai: return AssemblyAIASR(apiKey: key, terms: terms)
                 default: return AliyunASR(apiKey: key)
                 }

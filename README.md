@@ -66,7 +66,7 @@
 
 | 用途 | 可选的服务 | 说明 |
 |---|---|---|
-| 实时转写 | 阿里云百炼、Deepgram、AssemblyAI、本地离线 | 选「自动」会同时连接已填密钥的线路，用最快的那条。本地离线不需要密钥，但延迟高一些。 |
+| 实时转写 | 阿里云百炼、AssemblyAI、本地离线 | 选「自动」会同时连接已填密钥的线路，用最快的那条。本地离线不需要密钥，但延迟高一些。 |
 | 回答提示、复盘、模拟面试 | 通义千问(用阿里云百炼的密钥)、Claude | 国内推荐通义千问。设置里的「检测新模型」可以查看还能换哪些模型，包括 DeepSeek 和 Kimi。 |
 | 会后重新转写 | AssemblyAI | 区分说话人更准确；不填就用本机离线转写。 |
 
@@ -97,6 +97,6 @@ InterviewCopilot is a macOS companion for online interviews. It transcribes and 
 
 - Requires macOS 14.2 or later, on Apple silicon or Intel Macs.
 - Download `InterviewCopilot.dmg` from [Releases](../../releases), open it and drag the app onto the Applications folder. The app isn't notarized: on first launch, go to System Settings › Privacy & Security and click "Open Anyway".
-- Bring your own API keys (Alibaba Cloud Bailian, Deepgram, AssemblyAI, or Anthropic). A single Alibaba Cloud Bailian key covers transcription, answers, reviews and mock-interview speech. Keys stay on your Mac.
+- Bring your own API keys (Alibaba Cloud Bailian, AssemblyAI, or Anthropic). A single Alibaba Cloud Bailian key covers transcription, answers, reviews and mock-interview speech. Keys stay on your Mac.
 - The interface is available in Chinese and English and follows your system language by default.
 - Licensed under the [MIT License](LICENSE).
