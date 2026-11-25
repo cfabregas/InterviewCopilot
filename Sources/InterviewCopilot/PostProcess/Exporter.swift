@@ -94,3 +94,43 @@ enum Exporter {
         guard operation.run() else { throw AppError(L("写入 PDF 失败")) }
     }
 }
+
+import AVFoundation
+
+extension Exporter {
+    /// 把面试官(系统声音)和我(麦克风)两轨按录音时的时间差对齐，混成一个 m4a。
+    /// 有外放回声时麦克风里已经录到了双方，只导出麦克风那一轨，避免回声叠两遍。
+    static func writeAudio(session: SessionInfo, to url: URL) async throws {
+        let fm = FileManager.default
+        let hasSystem = fm.fileExists(atPath: session.systemFile.path)
+        let hasMic = fm.fileExists(atPath: session.micFile.path)
+        guard hasSystem || hasMic else { throw AppError(L("这场面试没有录音文件")) }
+
+        let composition = AVMutableComposition()
+        let offset = session.micOffsetMs
+        func add(_ file: URL, startMs: Int) async throws {
+            let asset = AVURLAsset(url: file)
+            guard let source = try await asset.loadTracks(withMediaType: .audio).first else { return }
+            let duration = try await asset.load(.duration)
+            let track = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)
+            try track?.insertTimeRange(CMTimeRange(start: .zero, duration: duration), of: source,
+                                       at: CMTime(value: CMTimeValue(max(startMs, 0)), timescale: 1000))
+        }
+        let micOnly = hasMic && (session.micOnlyPlayback || !hasSystem)
+        if hasSystem && !micOnly { try await add(session.systemFile, startMs: offset < 0 ? -offset : 0) }
+        if hasMic { try await add(session.micFile, startMs: micOnly ? 0 : max(offset, 0)) }
+
+        guard let export = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetAppleM4A) else {
+            throw AppError(L("无法创建音频导出"))
+        }
+        try? fm.removeItem(at: url)
+        export.outputURL = url
+        export.outputFileType = .m4a
+        await withCheckedContinuation { continuation in
+            export.exportAsynchronously { continuation.resume() }
+        }
+        if export.status != .completed {
+            throw export.error ?? AppError(L("音频导出失败"))
+        }
+    }
+}

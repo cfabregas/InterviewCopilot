@@ -279,6 +279,10 @@ private struct SessionDetailView: View {
                     Menu(L("导出")) {
                         Button("Markdown…") { export(pdf: false) }
                         Button("PDF…") { export(pdf: true) }
+                        if tab == 0 && hasAudio {
+                            Divider()
+                            Button(L("录音 (M4A)…")) { exportAudio() }
+                        }
                     }
                     .menuStyle(.borderlessButton)
                     .fixedSize()
@@ -590,9 +594,36 @@ private struct SessionDetailView: View {
         let message: String
     }
 
+    private var hasAudio: Bool {
+        FileManager.default.fileExists(atPath: session.systemFile.path) || FileManager.default.fileExists(atPath: session.micFile.path)
+    }
+
+    /// 导出这场面试的录音：双方混成一个文件
+    private func exportAudio() {
+        guard let current = Store.shared?.session(session.id) else { return }
+        let panel = NSSavePanel()
+        panel.title = L("导出录音")
+        panel.directoryURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
+        panel.nameFieldStringValue = current.displayTitle.replacingOccurrences(of: "/", with: "-") + "-" + L("录音") + ".m4a"
+        panel.allowedContentTypes = [.mpeg4Audio]
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        ToastCenter.show(L("正在导出录音…"))
+        Task {
+            do {
+                try await Exporter.writeAudio(session: current, to: url)
+                Log.write("已导出录音：\(url.path)")
+                ToastCenter.show(L("已导出到 %@", url.path.replacingOccurrences(of: NSHomeDirectory(), with: "~")))
+            } catch {
+                Log.write("导出录音失败：\(error)")
+                ToastCenter.shared.message = nil
+                exportResult = ExportResult(url: nil, title: L("导出失败"), message: error.localizedDescription)
+            }
+        }
+    }
+
     private var tabHasContent: Bool {
         switch tab {
-        case 0: return !model.utterances.isEmpty
+        case 0: return !model.utterances.isEmpty || hasAudio
         case 1: return !model.summary.isEmpty
         default: return !model.qa.isEmpty
         }

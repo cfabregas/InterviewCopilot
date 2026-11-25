@@ -107,6 +107,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if let arg = CommandLine.arguments.first(where: { $0.hasPrefix("--echo-test=") }) {
             Task { await runEchoTest(URL(fileURLWithPath: String(arg.dropFirst(12)))) }
         }
+        // 自测：把最新一场有录音的面试导出成混合录音，--audio-export-test=<输出路径>
+        if let arg = CommandLine.arguments.first(where: { $0.hasPrefix("--audio-export-test=") }) {
+            let out = URL(fileURLWithPath: String(arg.dropFirst(20)))
+            Task {
+                let id = CommandLine.arguments.first(where: { $0.hasPrefix("--session=") }).flatMap { Int64($0.dropFirst(10)) }
+                guard let session = Store.shared?.sessions().first(where: { id == nil ? FileManager.default.fileExists(atPath: $0.systemFile.path) : $0.id == id }) else {
+                    Log.write("录音导出自测：没有找到面试"); NSApp.terminate(nil); return
+                }
+                do {
+                    try await Exporter.writeAudio(session: session, to: out)
+                    Log.write("录音导出自测：\(session.displayTitle)，偏移 \(session.micOffsetMs) ms，只用麦克风 \(session.micOnlyPlayback)，已写入 \(out.path)")
+                } catch {
+                    Log.write("录音导出自测失败：\(error)")
+                }
+                NSApp.terminate(nil)
+            }
+        }
         if CommandLine.arguments.contains("--echo-scan") {
             Task.detached {
                 // 只读：对每场面试跑一遍回声检测，结果写进日志
