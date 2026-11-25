@@ -45,8 +45,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
     <key>CFBundleExecutable</key><string>InterviewCopilot</string>
     <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleShortVersionString</key><string>0.5.0</string>
-    <key>CFBundleVersion</key><string>5</string>
+    <key>CFBundleShortVersionString</key><string>0.6.0</string>
+    <key>CFBundleVersion</key><string>6</string>
     <key>LSMinimumSystemVersion</key><string>14.2</string>
     <key>NSHighResolutionCapable</key><true/>
     <key>NSAudioCaptureUsageDescription</key><string>采集会议中对方的声音，用于实时转写和翻译。</string>
