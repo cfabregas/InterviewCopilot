@@ -60,12 +60,19 @@ final class ResumeStore: ObservableObject {
 
     /// 生成答案时用哪份简历：英文面试优先英文简历，中文面试优先中文简历；只有另一种语言的也照用
     func text(for mode: LanguageMode) -> String {
+        // 自动识别：不知道会用哪种语言问，两份都给
+        if mode == .auto, let en = texts[.en], let zh = texts[.zh] {
+            return "【英文简历】\n\(en)\n\n【中文简历】\n\(zh)"
+        }
         let preferred: ResumeSlot = mode == .enToZh ? .en : .zh
         let other: ResumeSlot = preferred == .en ? .zh : .en
         return texts[preferred] ?? texts[other] ?? ""
     }
 
     func describeChoice(for mode: LanguageMode) -> String {
+        if mode == .auto, texts[.en] != nil, texts[.zh] != nil {
+            return L("中英文简历都用(%@，%@)", length(.en), length(.zh))
+        }
         let preferred: ResumeSlot = mode == .enToZh ? .en : .zh
         let other: ResumeSlot = preferred == .en ? .zh : .en
         if texts[preferred] != nil { return "\(preferred.title) \(length(preferred))" }

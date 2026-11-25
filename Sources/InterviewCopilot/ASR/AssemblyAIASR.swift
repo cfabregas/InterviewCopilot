@@ -15,6 +15,7 @@ final class AssemblyAIASR: ASRProvider, DropSimulating {
     /// 每攒够 50 ms 音频发一次(接口要求每包 20–1000 ms)
     private let chunkBytes = PCM16Downsampler.sampleRate * 2 / 20
     private var separator = " "
+    private var multilingual = false
     /// 已经定稿的最后一轮，防止同一轮重复定稿
     private var lastFinalTurn = -1
 
@@ -28,6 +29,7 @@ final class AssemblyAIASR: ASRProvider, DropSimulating {
 
     func start(locale: Locale) async throws {
         let chinese = locale.language.languageCode?.identifier == "zh"
+        multilingual = locale.isMultilingual
         separator = chinese ? "" : " "
         var components = URLComponents(string: "wss://streaming.assemblyai.com/v3/ws")!
         components.queryItems = [
@@ -35,8 +37,10 @@ final class AssemblyAIASR: ASRProvider, DropSimulating {
             URLQueryItem(name: "sample_rate", value: String(PCM16Downsampler.sampleRate)),
             URLQueryItem(name: "encoding", value: "pcm_s16le"),
         ]
-        // 英文是模型默认语言，不用指定；中文需要显式给语言代码
-        if chinese {
+        // 英文是模型默认语言，不用指定；中文需要显式给语言代码；自动识别同时给中英文，可以中英混说
+        if multilingual {
+            components.queryItems?.append(URLQueryItem(name: "language_codes", value: "[\"en\",\"zh\"]"))
+        } else if chinese {
             components.queryItems?.append(URLQueryItem(name: "language_codes", value: "[\"zh\"]"))
         }
         // 热词：JSON 数组
@@ -122,7 +126,8 @@ final class AssemblyAIASR: ASRProvider, DropSimulating {
                 eventContinuation.yield(ASREvent(kind: .final, text: final, startMs: startMs ?? 0, endMs: endMs))
             } else {
                 // 中间结果用全部词(含还没定稿的)，这样上屏最快
-                let running = words.compactMap { $0["text"] as? String }.joined(separator: separator)
+                let pieces = words.compactMap { $0["text"] as? String }
+                let running = multilingual ? joinSpeech(pieces) : pieces.joined(separator: separator)
                 let partial = running.isEmpty ? transcript : running
                 guard !partial.isEmpty else { return }
                 eventContinuation.yield(ASREvent(kind: .partial, text: partial, startMs: startMs ?? 0, endMs: endMs))

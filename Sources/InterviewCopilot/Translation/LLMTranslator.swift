@@ -7,7 +7,8 @@ struct LLMTranslator: TranslationProvider {
 
     /// 没填大模型密钥时返回 nil
     static func make(mode: LanguageMode) -> LLMTranslator? {
-        LLMLine.saved.makeClient().map { LLMTranslator(client: $0, mode: mode) }
+        guard mode.translates else { return nil }
+        return LLMLine.saved.makeClient().map { LLMTranslator(client: $0, mode: mode) }
     }
 
     func translate(_ text: String) async throws -> String {

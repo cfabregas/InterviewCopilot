@@ -16,7 +16,8 @@ enum PostTranscriber {
     // MARK: - 云端：AssemblyAI 录音文件接口
     // 文档：https://www.assemblyai.com/docs/api-reference/transcripts/submit
 
-    static func cloud(file: URL, apiKey: String, chinese: Bool, terms: [String],
+    /// language：zh 或 en；nil 表示自动识别(允许中英混说)
+    static func cloud(file: URL, apiKey: String, language: String?, terms: [String],
                       progress: @escaping (String) -> Void) async throws -> [Piece] {
         progress("上传录音")
         var upload = URLRequest(url: URL(string: "https://api.assemblyai.com/v2/upload")!)
@@ -31,9 +32,16 @@ enum PostTranscriber {
 
         var body: [String: Any] = [
             "audio_url": uploaded,
-            "language_code": chinese ? "zh" : "en",
             "speaker_labels": true,
         ]
+        if let language {
+            body["language_code"] = language
+        } else {
+            // 自动识别：universal-3-pro 能在一份录音里同时转出中文和英文，英文词保持完整；
+            // 不开 code_switching，开了以后中文为主的录音里英文词会粘在一起
+            body["language_detection"] = true
+            body["speech_models"] = ["universal-3-pro", "universal-2"]
+        }
         // 热词：每个最多 6 个词
         let keyterms = terms.filter { $0.split(separator: " ").count <= 6 }
         if !keyterms.isEmpty { body["keyterms_prompt"] = keyterms }
@@ -59,7 +67,7 @@ enum PostTranscriber {
             let result = try json(data, response)
             switch result["status"] as? String {
             case "completed":
-                return pieces(from: result, chinese: chinese)
+                return pieces(from: result)
             case "error":
                 throw AppError("云端转写失败：\(result["error"] as? String ?? "未知原因")")
             default:
@@ -88,7 +96,7 @@ enum PostTranscriber {
         return object
     }
 
-    private static func pieces(from result: [String: Any], chinese: Bool) -> [Piece] {
+    private static func pieces(from result: [String: Any]) -> [Piece] {
         func int(_ value: Any?) -> Int { (value as? NSNumber)?.intValue ?? 0 }
         if let utterances = result["utterances"] as? [[String: Any]], !utterances.isEmpty {
             return utterances.flatMap { item -> [Piece] in
@@ -101,7 +109,8 @@ enum PostTranscriber {
                 var current: [[String: Any]] = []
                 func flush() {
                     guard let first = current.first, let last = current.last else { return }
-                    let joined = current.compactMap { $0["text"] as? String }.joined(separator: chinese ? "" : " ")
+                    // 按词重新拼：英文词之间加空格，挨着汉字不加(自动识别时服务端整段文字里英文词会粘在一起)
+                    let joined = joinSpeech(current.compactMap { $0["text"] as? String })
                     pieces.append(Piece(speaker: speaker, startMs: int(first["start"]), endMs: int(last["end"]), text: joined))
                     current = []
                 }
@@ -122,6 +131,7 @@ enum PostTranscriber {
     // MARK: - 本地：系统自带的语音识别，离线，分不出说话人
 
     static func local(file: URL, locale: Locale, terms: [String]) async throws -> [Piece] {
+        let locale = locale.singleLanguage
         if #available(macOS 26, *), !LocalASR.forceLegacy { return try await analyzerLocal(file: file, locale: locale, terms: terms) }
         return try await legacyLocal(file: file, locale: locale, terms: terms)
     }

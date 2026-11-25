@@ -20,6 +20,7 @@ final class DeepgramASR: ASRProvider, DropSimulating {
     private var sentenceStartMs: Int?
     private var lastEndMs = 0
     private var separator = " "
+    private var multilingual = false
 
     private let terms: [String]
 
@@ -30,21 +31,27 @@ final class DeepgramASR: ASRProvider, DropSimulating {
     }
 
     func start(locale: Locale) async throws {
+        multilingual = locale.isMultilingual
         let chinese = locale.language.languageCode?.identifier == "zh"
         separator = chinese ? "" : " "
         var components = URLComponents(string: "wss://api.deepgram.com/v1/listen")!
         components.queryItems = [
-            // 英文用 nova-3；中文用 nova-2(nova-3 对中文的支持不确定)
+            // 英文和自动识别用 nova-3；中文用 nova-2(nova-3 对单独中文的支持不确定)
             URLQueryItem(name: "model", value: chinese ? "nova-2" : "nova-3"),
-            URLQueryItem(name: "language", value: chinese ? "zh-CN" : "en"),
+            // 自动识别：multi 模式能在中英文之间来回切换，每段结果会标出语言
+            URLQueryItem(name: "language", value: multilingual ? "multi" : chinese ? "zh-CN" : "en"),
             URLQueryItem(name: "encoding", value: "linear16"),
             URLQueryItem(name: "sample_rate", value: String(PCM16Downsampler.sampleRate)),
             URLQueryItem(name: "channels", value: "1"),
             URLQueryItem(name: "interim_results", value: "true"),
             URLQueryItem(name: "smart_format", value: "true"),
-            URLQueryItem(name: "endpointing", value: "300"),
+            // 多语言模式官方建议 100 ms
+            URLQueryItem(name: "endpointing", value: multilingual ? "100" : "300"),
             URLQueryItem(name: "utterance_end_ms", value: "1000"),
         ]
+        if multilingual {
+            components.queryItems?.append(contentsOf: ["zh", "en"].map { URLQueryItem(name: "language_hint", value: $0) })
+        }
         // 热词：只有 nova-3 支持 keyterm
         if !chinese {
             components.queryItems?.append(contentsOf: terms.map { URLQueryItem(name: "keyterm", value: $0) })
@@ -115,7 +122,8 @@ final class DeepgramASR: ASRProvider, DropSimulating {
         case "Results":
             guard let channel = message["channel"] as? [String: Any],
                   let alternative = (channel["alternatives"] as? [[String: Any]])?.first else { return }
-            let transcript = (alternative["transcript"] as? String ?? "").trimmingCharacters(in: .whitespaces)
+            var transcript = (alternative["transcript"] as? String ?? "").trimmingCharacters(in: .whitespaces)
+            if multilingual { transcript = transcript.simplifiedChinese }
             let isFinal = message["is_final"] as? Bool ?? false
             let speechFinal = message["speech_final"] as? Bool ?? false
             let start = message["start"] as? Double ?? 0
@@ -124,11 +132,14 @@ final class DeepgramASR: ASRProvider, DropSimulating {
             let lastWordEnd = ((alternative["words"] as? [[String: Any]])?.last?["end"] as? Double) ?? (start + duration)
 
             if transcript.isEmpty {
+                // 中间结果出过字、定稿却是空的：这句作废，别让它的开始时间带到下一句
+                if isFinal, committed.isEmpty { sentenceStartMs = nil }
                 if speechFinal { flush() }
                 return
             }
             if sentenceStartMs == nil { sentenceStartMs = Int(start * 1000) }
-            let full = committed.isEmpty ? transcript : committed + separator + transcript
+            let full = committed.isEmpty ? transcript
+                : multilingual ? joinSpeech([committed, transcript]) : committed + separator + transcript
             let endMs = Int(lastWordEnd * 1000)
             if isFinal {
                 committed = full

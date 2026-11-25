@@ -358,5 +358,10 @@
   "回放方式": "Playback",
   "只放麦克风": "Mic only",
   "两条一起": "Both tracks",
-  "外放时麦克风里已经录到了对方的声音，只放麦克风就不会有回声": "When you used speakers, the mic already recorded the other side, so playing the mic alone avoids the echo."
+  "外放时麦克风里已经录到了对方的声音，只放麦克风就不会有回声": "When you used speakers, the mic already recorded the other side, so playing the mic alone avoids the echo.",
+  "自动识别(只转写)": "Auto-detect (transcribe only)",
+  "自动识别中英文，只转写不翻译": "Detect English and Chinese automatically, transcribe without translating",
+  "切换到翻译": "Switch to translation",
+  "翻译": "Translate",
+  "中英文简历都用(%@，%@)": "Using both resumes (%@, %@)"
 }

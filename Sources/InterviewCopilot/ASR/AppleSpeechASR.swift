@@ -49,6 +49,7 @@ final class AppleSpeechASR: ASRProvider {
     }
 
     func start(locale: Locale) async throws {
+        let locale = locale.singleLanguage
         let module: any SpeechModule
         let startResults: () -> Task<Void, Never>
 

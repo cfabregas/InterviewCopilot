@@ -158,7 +158,13 @@ struct SubtitleOverlayView: View {
                 // 越早的句子越淡，眼睛自然落在最新一句上
                 let latest = line.id == visible.last?.id
                 VStack(alignment: .leading, spacing: 3) {
-                    if settings.showSource {
+                    if !controller.mode.translates {
+                        // 自动识别只转写：原文就是主字幕
+                        Text(line.source)
+                            .font(.system(size: settings.fontSize, weight: latest ? .semibold : .regular))
+                            .foregroundStyle(.white.opacity(line.isFinal ? (latest ? 1 : 0.8) : 0.7))
+                            .lineSpacing(2)
+                    } else if settings.showSource {
                         Text(line.source)
                             .font(.system(size: settings.fontSize * 0.66))
                             .foregroundStyle(.white.opacity(line.isFinal ? 0.62 : 0.45))

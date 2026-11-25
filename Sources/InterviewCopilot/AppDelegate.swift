@@ -324,7 +324,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 seconds = Double(file.length) / file.processingFormat.sampleRate
             }
         }
-        let mode: LanguageMode = CommandLine.arguments.contains("--mode=zh") ? .zhToEn : .enToZh
+        let mode = LanguageMode.fromArguments
         let id = store.createSession(mode: mode.rawValue, dir: dir.path)
         let now = Date()
         store.setAudioStart(session: id, system: now, mic: now)
@@ -429,8 +429,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
         // --qa：每段之间多停一会儿，让答案有时间生成完
         let pauseSeconds: UInt64 = CommandLine.arguments.contains("--qa") ? 14 : 0
-        let chinese = CommandLine.arguments.contains("--mode=zh")   // 中文朗读，测中文听写
-        controller.mode = chinese ? .zhToEn : .enToZh
+        controller.mode = LanguageMode.fromArguments   // --mode=zh 中文朗读；--mode=auto 中英文交替、中文里夹英文
+
         await controller.start()
         guard controller.isRunning else {
             Log.write("=== 自测失败：会话没有启动 ===")
@@ -449,11 +449,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             "How did you handle disagreements with your teammates about the technical design?",
             "Let's talk about system design. How would you design a rate limiter for a distributed API gateway?",
         ]
-        for sentence in chinese ? chineseSentences : englishSentences {
+        let mixedSentences = [
+            englishSentences[0],
+            "我们前端主要用 React 和 TypeScript，状态管理用的是 Zustand，上线之前会跑一遍 end to end test。",
+            "你们看板里有几十个图表的时候，是怎么做性能优化的？",
+            englishSentences[2],
+        ]
+        let sentences = switch controller.mode {
+        case .auto: mixedSentences
+        case .zhToEn: chineseSentences
+        case .enToZh: englishSentences
+        }
+        for sentence in sentences {
             await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
                 let say = Process()
                 say.executableURL = URL(fileURLWithPath: "/usr/bin/say")
-                say.arguments = ["-v", chinese ? "Tingting" : "Samantha", "-r", "175", sentence]
+                say.arguments = ["-v", sentence.hasChinese ? "Tingting" : "Samantha", "-r", "175", sentence]
                 say.terminationHandler = { _ in continuation.resume() }
                 Log.write("朗读开始")
                 do { try say.run() } catch { continuation.resume() }
@@ -466,6 +477,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let finals = controller.lines.filter(\.isFinal)
         let translated = finals.filter { !$0.translation.isEmpty }
         Log.write("自测结果：定稿句段 \(finals.count) 条，其中有译文 \(translated.count) 条")
+        for line in finals { Log.write("  定稿：\(line.source)") }
         Log.write("=== 自测结束 ===")
         try? await Task.sleep(nanoseconds: 500_000_000)
         NSApp.terminate(nil)

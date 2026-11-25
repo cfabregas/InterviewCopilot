@@ -344,7 +344,7 @@ final class Checkup: ObservableObject {
         Task {
             var parts: [String] = []
             var missing = false
-            for mode in LanguageMode.allCases {
+            for mode in LanguageMode.allCases where mode.translates {
                 switch await AppleTranslator(source: mode.sourceLanguage, target: mode.targetLanguage).prepare() {
                 case .ready: parts.append(L("%@ 已安装", "\(mode.title)"))
                 case .needsDownload:

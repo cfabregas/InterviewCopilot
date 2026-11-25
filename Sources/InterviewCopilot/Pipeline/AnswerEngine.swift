@@ -106,7 +106,7 @@ final class AnswerEngine: ObservableObject {
 
         // 预启动：这句话一看就是问题，不等这一轮结束
         if Self.looksLikeQuestion(text) {
-            let question = turn.joined(separator: mode == .enToZh ? " " : "")
+            let question = joinSpeech(turn)
             prestarted = question
             Log.write("问题预启动：\(question)")
             startAnswer(question: question, heardAt: Date())
@@ -128,7 +128,7 @@ final class AnswerEngine: ObservableObject {
     }
 
     private func closeTurn() async {
-        let text = turn.joined(separator: mode == .enToZh ? " " : "")
+        let text = joinSpeech(turn)
         let already = prestarted
         turn = []
         prestarted = nil
@@ -137,7 +137,7 @@ final class AnswerEngine: ObservableObject {
         guard enabled, let llm else { return }
 
         // 太短的一轮(寒暄、应答)不值得问模型
-        let tooShort = mode == .enToZh ? text.split(separator: " ").count < 4 : text.count < 6
+        let tooShort = mode.resolved(for: text) == .enToZh ? text.split(separator: " ").count < 4 : text.count < 6
         if tooShort, already == nil { return }
 
         let isQuestion = await classify(text, using: llm)
@@ -156,7 +156,7 @@ final class AnswerEngine: ObservableObject {
 
     /// 快捷键：对上一轮发言(或正在进行的这一轮)强制生成答案
     func answerLastTurn() {
-        let current = turn.joined(separator: mode == .enToZh ? " " : "")
+        let current = joinSpeech(turn)
         let question = current.isEmpty ? lastTurn : current
         guard !question.isEmpty else {
             Log.write("还没有听到可以回答的内容")
@@ -259,9 +259,11 @@ final class AnswerEngine: ObservableObject {
     }
 
     static func makeSystemPrompt(mode: LanguageMode, resume: String, jd: String) -> String {
-        let script = mode == .enToZh
-            ? "用英文写一段口语化的回答，100–150 个单词"
-            : "用中文写一段口语化的回答，200–300 个字"
+        let script = switch mode {
+        case .enToZh: "用英文写一段口语化的回答，100–150 个单词"
+        case .zhToEn: "用中文写一段口语化的回答，200–300 个字"
+        case .auto: "用面试官这段话所用的语言写一段口语化的回答：面试官说中文就用中文写 200–300 个字，说英文就用英文写 100–150 个单词"
+        }
         return """
         你是候选人的面试提词助手。面试官刚说了一段话，你要根据候选人的简历，给出候选人可以直接照着说的回答。
 

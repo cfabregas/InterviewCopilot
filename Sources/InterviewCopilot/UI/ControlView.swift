@@ -89,7 +89,11 @@ struct ListenPage: View {
                 } else {
                     ForEach(controller.lines.suffix(2)) { line in
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(line.source).font(.system(size: 12)).foregroundStyle(Theme.muted).lineLimit(1)
+                            if !controller.mode.translates {
+                                Text(line.source).font(Theme.script(19)).foregroundStyle(Theme.ink).lineLimit(2)
+                            } else {
+                                Text(line.source).font(.system(size: 12)).foregroundStyle(Theme.muted).lineLimit(1)
+                            }
                             if !line.translation.isEmpty {
                                 Text(line.translation).font(Theme.script(19)).foregroundStyle(Theme.ink).lineLimit(2)
                             }
@@ -152,7 +156,7 @@ struct ListenPage: View {
                     Button(L("去处理")) { open("checkup") }.buttonStyle(LinkButtonStyle())
                 }
             }
-            if controller.translationNeedsDownload {
+            if controller.translationNeedsDownload && controller.mode.translates {
                 row(L("翻译语言包"), L("还没有安装，现在只能转写"), good: false) {
                     Button(L("下载")) {
                         downloadRequest += 1
@@ -289,40 +293,60 @@ private struct TranslationDownload: ViewModifier {
     }
 }
 
-/// 翻译方向：「英文 ⇄ 中文」两种语言位置固定，中间上下两支箭头只亮当前方向那支，点一下互换。
+/// 听译方向：左边「自动」只转写不翻译；右边「英文 ⇄ 中文」两种语言位置固定，
+/// 中间上下两支箭头只亮当前方向那支。点右边：从自动切过来时用上次的方向，已经在翻译时互换方向。
 struct LanguageSwapControl: View {
     @Binding var mode: LanguageMode
     @Environment(\.isEnabled) private var enabled
+    /// 上次用的翻译方向，从自动切回翻译时沿用
+    @AppStorage("lastTranslateMode") private var lastTranslate = LanguageMode.enToZh.rawValue
 
+    private var auto: Bool { mode == .auto }
     private var forward: Bool { mode == .enToZh }
 
     var body: some View {
-        Button(action: swap) {
-            HStack(spacing: 10) {
-                label(L("英文"), active: forward)
-                VStack(spacing: 4) {
-                    harpoon(.right, lit: forward)
-                    harpoon(.left, lit: !forward)
-                }
-                label(L("中文"), active: !forward)
+        HStack(spacing: 0) {
+            Button { select(.auto) } label: {
+                Text(L("自动"))
+                    .font(.system(size: 14, weight: auto ? .semibold : .regular))
+                    .foregroundStyle(auto && enabled ? Theme.accent : Theme.muted)
+                    .fixedSize()
+                    .padding(.leading, 16).padding(.trailing, 12).padding(.vertical, 8)
+                    .contentShape(Rectangle())
             }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 8)
-            .contentShape(Capsule())
+            .buttonStyle(.plain)
+            .help(L("自动识别中英文，只转写不翻译"))
+            .accessibilityLabel(LanguageMode.auto.title)
+            .accessibilityAddTraits(auto ? .isSelected : [])
+
+            Rectangle().fill(Theme.line).frame(width: 1, height: 16)
+
+            Button(action: translateTapped) {
+                HStack(spacing: 10) {
+                    label(L("英文"), active: !auto && forward)
+                    VStack(spacing: 4) {
+                        harpoon(.right, lit: !auto && forward)
+                        harpoon(.left, lit: !auto && !forward)
+                    }
+                    label(L("中文"), active: !auto && !forward)
+                }
+                .padding(.leading, 12).padding(.trailing, 16).padding(.vertical, 8)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(auto ? L("切换到翻译") : L("互换翻译方向"))
+            .accessibilityLabel(auto ? L("翻译") : mode.title)
+            .accessibilityHint(auto ? L("切换到翻译") : L("互换翻译方向"))
         }
-        .buttonStyle(.plain)
         .capsuleGlass()
         .opacity(enabled ? 1 : 0.6)
-        .help(L("互换翻译方向"))
-        .accessibilityLabel(mode.title)
-        .accessibilityHint(L("互换翻译方向"))
     }
 
-    /// 源语言加粗，译成的语言常规
+    /// 当前方向的源语言加粗；自动模式下两边都是常规字重、浅色
     private func label(_ text: String, active: Bool) -> some View {
         Text(text)
             .font(.system(size: 14, weight: active ? .semibold : .regular))
-            .foregroundStyle(Theme.ink)
+            .foregroundStyle(auto ? Theme.muted : Theme.ink)
             .fixedSize()
     }
 
@@ -333,10 +357,18 @@ struct LanguageSwapControl: View {
             .frame(width: 18, height: 5)
     }
 
-    private func swap() {
-        withAnimation(.easeInOut(duration: 0.2)) {
-            mode = forward ? .zhToEn : .enToZh
+    private func translateTapped() {
+        if auto {
+            select(LanguageMode(rawValue: lastTranslate) ?? .enToZh)
+        } else {
+            select(forward ? .zhToEn : .enToZh)
         }
+    }
+
+    private func select(_ new: LanguageMode) {
+        withAnimation(.easeInOut(duration: 0.2)) { mode = new }
+        LanguageMode.saved = new
+        if new != .auto { lastTranslate = new.rawValue }
     }
 }
 

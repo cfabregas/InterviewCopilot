@@ -34,7 +34,8 @@ final class SessionController: ObservableObject {
     @Published var isRunning = false
     @Published var isBusy = false
     @Published var status = L("未开始")
-    @Published var mode: LanguageMode = .enToZh
+    /// 界面上切换时会记下来(LanguageMode.saved)，自测改这里不影响用户的选择
+    @Published var mode: LanguageMode = .saved
     @Published var line: ASRLine = .initial {
         didSet { UserDefaults.standard.set(line.rawValue, forKey: "asrLine") }
     }
@@ -93,8 +94,11 @@ final class SessionController: ObservableObject {
         do {
             if store == nil { store = Store.shared }
 
-            // 翻译：语言包没装时仍然可以只转写
-            if #available(macOS 26, *), !LocalASR.forceLegacy {
+            // 翻译：自动识别模式只转写；语言包没装时也只转写
+            if !mode.translates {
+                translator = nil
+                translationNeedsDownload = false
+            } else if #available(macOS 26, *), !LocalASR.forceLegacy {
                 let appleTranslator = AppleTranslator(source: mode.sourceLanguage, target: mode.targetLanguage)
                 switch await appleTranslator.prepare() {
                 case .ready:
@@ -354,7 +358,7 @@ final class SessionController: ObservableObject {
 
             let segmentID = store?.insertSegment(session: sessionID, channel: "system",
                                                  startMs: event.startMs, endMs: max(event.endMs, event.startMs),
-                                                 lang: mode.sourceLanguage.minimalIdentifier, text: text) ?? -1
+                                                 lang: mode.resolved(for: text).sourceLanguage.minimalIdentifier, text: text) ?? -1
             lines[index].segmentID = segmentID
 
             // 定稿延迟：这句话说完到定稿结果出来过了多久
@@ -410,7 +414,7 @@ final class SessionController: ObservableObject {
               let line = lines.first(where: { $0.id == lineID }) else { return }
         let text = line.source
         // 只有一两个词时翻出来多半是错的(例如 "Let" 被译成"擦网球")，等内容多一点再翻
-        let enough = mode == .enToZh ? text.split(separator: " ").count >= 3 : text.count >= 4
+        let enough = mode.resolved(for: text) == .enToZh ? text.split(separator: " ").count >= 3 : text.count >= 4
         guard enough else { return }
         provisionalInFlight = true
         lastProvisionalAt = Date()

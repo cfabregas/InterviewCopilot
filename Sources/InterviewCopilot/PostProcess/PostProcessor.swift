@@ -71,13 +71,17 @@ final class PostProcessor: ObservableObject {
         // --post-local：自测时强制走本地转写
         let key = CommandLine.arguments.contains("--post-local") ? nil : KeyStore.get("asr.assemblyai")
         let locale = session.mode.sourceLocale
-        let chinese = session.mode == .zhToEn
+        let language: String? = switch session.mode {
+        case .auto: nil
+        case .enToZh: "en"
+        case .zhToEn: "zh"
+        }
 
         // 有 AssemblyAI 密钥就用云端(更准，还能分说话人)；没有密钥或云端失败时用本地
         @Sendable func run(_ file: URL, _ name: String, report: @escaping @Sendable (String) -> Void) async throws -> ([PostTranscriber.Piece], String) {
             if let key {
                 do {
-                    let pieces = try await PostTranscriber.cloud(file: file, apiKey: key, chinese: chinese, terms: terms,
+                    let pieces = try await PostTranscriber.cloud(file: file, apiKey: key, language: language, terms: terms,
                                                                  progress: report)
                     return (pieces, "云端")
                 } catch {
@@ -136,7 +140,7 @@ final class PostProcessor: ObservableObject {
                 store.run("DELETE FROM utterance WHERE id = ?", [mine.id])
             } else {
                 store.run("UPDATE utterance SET text = ? WHERE id = ?",
-                          [kept.joined(separator: session.mode == .enToZh ? " " : ""), mine.id])
+                          [joinSpeech(kept), mine.id])
             }
             removed += sentences.count - kept.count
         }
@@ -201,6 +205,7 @@ final class PostProcessor: ObservableObject {
         guard let llm = answers.llmLine.makeClient() else { return "跳过：没有填写大模型密钥" }
         let utterances = store.utterances(session: session.id)
         guard !utterances.isEmpty else { return "跳过：没有内容" }
+        guard session.mode.translates else { return "跳过：自动识别模式不翻译" }
         let target = session.mode == .enToZh ? "简体中文" : "英文"
         let terms = Terms.load()
         let system = """
@@ -303,7 +308,7 @@ final class PostProcessor: ObservableObject {
                 let range = utterances[from...min(to, utterances.count - 1)]
                 // 普通问题只取我说的话；反问取面试官的回答
                 let wanted = kind == "反问" ? range.filter { $0.channel == "system" } : range.filter { $0.channel == "mic" }
-                answer = wanted.map(\.text).joined(separator: session.mode == .enToZh ? " " : "")
+                answer = joinSpeech(wanted.map(\.text))
             }
             // 会中给过的建议答案：按时间找离这个问题最近的一条
             let asked = utterances[at]
@@ -314,9 +319,15 @@ final class PostProcessor: ObservableObject {
         }
 
         // 第二步：逐题评价，几题同时进行
-        let resume = answers.resume.text(for: session.mode)
+        // 自动识别的面试可能中英文都有：参考答案跟着每道题的语言走，简历两份都给
+        let mode = session.mode
+        let resume = answers.resume.text(for: mode)
         let jd = answers.resume.jd
-        let language = session.mode == .enToZh ? "英文" : "中文"
+        let referenceRule = switch mode {
+        case .enToZh: "用英文写一段候选人可以直接说的回答(120–180 个单词)"
+        case .zhToEn: "用中文写一段候选人可以直接说的回答(250–350 个字)"
+        case .auto: "用这道面试问题所用的语言写一段候选人可以直接说的回答(英文问题用英文，120–180 个单词；中文问题用中文，250–350 个字)"
+        }
         let evaluationSystem = """
         你是资深面试教练，在帮候选人复盘一场面试。下面给出一个面试问题、候选人当时的回答，以及候选人的简历。
         文字记录来自语音识别，可能有同音错字(尤其是专有名词)：按最合理的意思理解，不要把识别错误当成候选人的发音或表达问题。
@@ -328,7 +339,7 @@ final class PostProcessor: ObservableObject {
         ## 改进建议
         用中文，2–4 条，每条一行，以"- "开头，要具体可执行。
         ## 参考答案
-        用\(language)写一段候选人可以直接说的回答(\(session.mode == .enToZh ? "120–180 个单词" : "250–350 个字"))，第一人称。
+        \(referenceRule)，第一人称。
         只引用简历里真实存在的经历、项目和数字，不得编造，每件事都要说对是在哪家公司做的；简历里没有的具体情节用方括号占位，例如"[补充：当时的分歧是什么]"。
 
         <resume>

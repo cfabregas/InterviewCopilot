@@ -30,6 +30,7 @@ final class LegacySpeechASR: ASRProvider {
     }
 
     func start(locale: Locale) async throws {
+        let locale = locale.singleLanguage
         let status = await withCheckedContinuation { done in
             SFSpeechRecognizer.requestAuthorization { done.resume(returning: $0) }
         }
