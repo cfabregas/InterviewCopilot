@@ -51,6 +51,7 @@ struct MainView: View {
     @ObservedObject var mock: MockInterview
     @ObservedObject private var l10n = L10n.shared
     @ObservedObject private var updates = UpdateChecker.shared
+    @ObservedObject private var toasts = ToastCenter.shared
 
     var body: some View {
         NavigationSplitView {
@@ -82,6 +83,8 @@ struct MainView: View {
             .ignoresSafeArea(.container, edges: [.top, .bottom])
         }
         .navigationSplitViewStyle(.balanced)
+        // 轻提示相对整个窗口居中，不跟着右边内容区偏
+        .toast($toasts.message)
         .onChange(of: navigator.page) {
             if navigator.page == .review { reviewModel.reload() }
             if navigator.page == .settings { checkup.refresh() }

@@ -260,8 +260,6 @@ private struct SessionDetailView: View {
     @State private var confirmingDelete = false
     /// 导出结果：成功时是文件位置，失败时是原因
     @State private var exportResult: ExportResult?
-    /// 导出成功的轻提示，几秒后自动消失
-    @State private var toast: String?
     @State private var renaming: Utterance?
     @State private var newName = ""
 
@@ -290,7 +288,6 @@ private struct SessionDetailView: View {
             .frame(maxWidth: .infinity)
         }
         .onAppear { title = session.title }
-        .toast($toast)
         .confirmationDialog(L("删除这场面试的全部记录和录音？删除后无法恢复。"), isPresented: $confirmingDelete) {
             Button(L("删除"), role: .destructive) { model.delete(session) }
             Button(L("取消"), role: .cancel) {}
@@ -608,7 +605,7 @@ private struct SessionDetailView: View {
             }
             Log.write("已导出：\(url.path)")
             let shown = url.path.replacingOccurrences(of: NSHomeDirectory(), with: "~")
-            toast = L("已导出到 %@", shown)
+            ToastCenter.show(L("已导出到 %@", shown))
         } catch {
             Log.write("导出失败：\(error)")
             exportResult = ExportResult(url: nil, title: L("导出失败"), message: error.localizedDescription)

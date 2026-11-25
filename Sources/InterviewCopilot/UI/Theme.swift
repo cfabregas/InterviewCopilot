@@ -345,6 +345,15 @@ private struct SegmentFrames: PreferenceKey {
     }
 }
 
+/// 全 app 共用的轻提示：哪个页面都往这里放，主窗口顶部居中显示
+@MainActor
+final class ToastCenter: ObservableObject {
+    static let shared = ToastCenter()
+    @Published var message: String?
+
+    static func show(_ message: String) { shared.message = message }
+}
+
 private struct ToastModifier: ViewModifier {
     @Binding var message: String?
     let seconds: Double
