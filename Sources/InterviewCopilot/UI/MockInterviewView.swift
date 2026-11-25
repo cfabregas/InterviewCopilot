@@ -41,14 +41,14 @@ struct MockInterviewView: View {
                 Text(L("坐下来，像真的一样答一遍。"))
                     .font(Theme.script(24))
                     .foregroundStyle(Theme.ink)
-                Text(resumeLine + L("。") + (resume.jd.isEmpty ? L("还没有填岗位描述，填了题目会更贴近岗位。") : L("岗位描述已填写 %@ 字。", "\(resume.jd.count)")))
+                Text(resumeLine + L("。") + (resume.jd.isEmpty ? L("还没有填岗位描述，可以在面试助手页的准备情况里填，题目会更贴近岗位。") : L("岗位描述已填写 %@ 字。", "\(resume.jd.count)")))
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.muted)
                 HStack(spacing: 14) {
                     Button(L("开始模拟面试")) { mock.start() }
                         .buttonStyle(PrimaryButtonStyle(large: true))
                         .keyboardShortcut(.defaultAction)
-                    Button(L("管理简历和岗位描述")) { navigator.page = .resume }
+                    Button(L("管理简历")) { navigator.page = .resume }
                         .buttonStyle(QuietButtonStyle(large: true))
                     if !mock.status.isEmpty {
                         Text(mock.status).font(.system(size: 13)).foregroundStyle(Theme.cue)

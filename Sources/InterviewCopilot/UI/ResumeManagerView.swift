@@ -1,7 +1,7 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// 简历管理页：导入、更换、清除两份简历，查看和编辑每份简历带来的热词，以及手动添加的热词和岗位描述。
+/// 简历管理页：导入、更换、清除两份简历，查看和编辑每份简历带来的热词，以及手动添加的热词。
 struct ResumeManagerView: View {
     @ObservedObject var resume: ResumeStore
     @ObservedObject var answers: AnswerEngine
@@ -33,27 +33,15 @@ struct ResumeManagerView: View {
                         }
                     }
 
-                    // 手动热词和岗位描述也左右并排
-                    HStack(alignment: .top, spacing: 32) {
-                        VStack(alignment: .leading, spacing: 12) {
-                            SectionRule(title: L("手动添加的热词"))
-                            TermChips(terms: manualList, locked: locked) {
-                                manualTerms = $0.joined(separator: ", ")
-                            }
+                    // 岗位描述移到了面试助手页的准备情况里，每场面试前填写
+                    VStack(alignment: .leading, spacing: 12) {
+                        SectionRule(title: L("手动添加的热词"))
+                        TermChips(terms: manualList, locked: locked) {
+                            manualTerms = $0.joined(separator: ", ")
                         }
-                        .disabled(locked)
-                        .frame(maxWidth: .infinity, alignment: .topLeading)
-
-                        VStack(alignment: .leading, spacing: 12) {
-                            SectionRule(title: L("岗位描述，可以不填"))
-                            TextEditor(text: $resume.jd)
-                                .font(.system(size: 13))
-                                .scrollContentBackground(.hidden)
-                                .frame(height: 140)
-                                .surface(radius: 12, padding: 10)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .topLeading)
                     }
+                    .disabled(locked)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
                 .padding(.horizontal, 28)
                 .padding(.bottom, 28)

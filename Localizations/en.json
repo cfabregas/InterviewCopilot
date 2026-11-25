@@ -377,5 +377,13 @@
   "录音": "Recording",
   "正在导出录音…": "Exporting recording…",
   "无法创建音频导出": "Couldn't start the audio export",
-  "音频导出失败": "Audio export failed"
+  "音频导出失败": "Audio export failed",
+  "岗位描述": "Job description",
+  "可以不填，填了回答会更贴近岗位": "Optional; answers fit the role better with it",
+  "已填写 %@ 字": "%@ characters",
+  "清空": "Clear",
+  "把这次面试的岗位描述(JD)粘贴到这里。只在这次打开 app 期间有效，关掉 app 就清空。": "Paste the job description for this interview. It's kept only while the app is open and cleared when you quit.",
+  "面试进行中，岗位描述已经交给答案生成，结束后可以修改": "The interview is running and already uses this job description. You can edit it afterwards.",
+  "还没有填岗位描述，可以在面试助手页的准备情况里填，题目会更贴近岗位。": "No job description yet. Add one under Readiness on the Copilot page so questions fit the role.",
+  "管理简历": "Manage resumes"
 }

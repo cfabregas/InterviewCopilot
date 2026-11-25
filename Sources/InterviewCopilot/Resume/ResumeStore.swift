@@ -22,9 +22,8 @@ final class ResumeStore: ObservableObject {
     @Published private(set) var fileNames: [ResumeSlot: String] = [:]
     @Published private(set) var terms: [ResumeSlot: [String]] = [:]
     @Published private(set) var analyzing: Set<ResumeSlot> = []
-    @Published var jd = "" {
-        didSet { if jd != oldValue { try? jd.write(to: Self.jdFile, atomically: true, encoding: .utf8) } }
-    }
+    /// 岗位描述：每次面试前在面试助手页填写，只放在内存里，关掉 app 就清空
+    @Published var jd = ""
 
     /// 两份简历的热词合并后存在这里，转写启动时读取
     static let termsDefaultsKey = "resumeTerms"
@@ -40,7 +39,8 @@ final class ResumeStore: ObservableObject {
             fileNames[slot] = defaults.string(forKey: slot.nameKey) ?? ""
             terms[slot] = (defaults.string(forKey: slot.termsKey) ?? "").split(separator: "\n").map(String.init)
         }
-        jd = (try? String(contentsOf: Self.jdFile, encoding: .utf8)) ?? ""
+        // 早期版本会把岗位描述存成文件，现在不再保存，顺手删掉
+        try? FileManager.default.removeItem(at: Self.jdFile)
     }
 
     /// 早期版本只有一份简历：按内容是中文还是英文放进对应的位置
