@@ -41,7 +41,7 @@ struct MockInterviewView: View {
                 Text(L("坐下来，像真的一样答一遍。"))
                     .font(Theme.script(24))
                     .foregroundStyle(Theme.ink)
-                Text(resumeLine + L("。") + (resume.jd.isEmpty ? L("还没有填岗位描述，可以在面试助手页的准备情况里填，题目会更贴近岗位。") : L("岗位描述已填写 %@ 字。", "\(resume.jd.count)")))
+                Text(resumeLine + L("。") + (resume.jd.isEmpty ? L("未填写岗位描述，可在面试助手的准备情况中填写。") : L("岗位描述已填写 %@ 字。", "\(resume.jd.count)")))
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.muted)
                 HStack(spacing: 14) {

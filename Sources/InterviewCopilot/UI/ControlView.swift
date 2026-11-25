@@ -178,7 +178,7 @@ struct ListenPage: View {
                     Circle().fill(resume.jd.isEmpty ? Theme.muted.opacity(0.5) : Theme.good).frame(width: 7, height: 7)
                     Text(L("岗位描述")).font(.system(size: 13)).foregroundStyle(Theme.muted).lineLimit(1)
                         .frame(width: L10n.shared.isSource ? 76 : 150, alignment: .leading)
-                    Text(resume.jd.isEmpty ? L("可以不填，填了回答会更贴近岗位") : L("已填写 %@ 字", "\(resume.jd.count)"))
+                    Text(resume.jd.isEmpty ? L("选填") : L("已填写 %@ 字", "\(resume.jd.count)"))
                         .font(.system(size: 13)).foregroundStyle(Theme.ink).lineLimit(1)
                     Spacer()
                     if !resume.jd.isEmpty && !controller.isRunning {
@@ -187,7 +187,7 @@ struct ListenPage: View {
                 }
                 ZStack(alignment: .topLeading) {
                     if resume.jd.isEmpty {
-                        Text(L("把这次面试的岗位描述(JD)粘贴到这里。只在这次打开 app 期间有效，关掉 app 就清空。"))
+                        Text(L("粘贴岗位描述（JD），退出 app 后清空"))
                             .font(.system(size: 12.5)).foregroundStyle(Theme.muted.opacity(0.8))
                             .padding(.horizontal, 5).padding(.vertical, 1)
                             .allowsHitTesting(false)
@@ -199,7 +199,7 @@ struct ListenPage: View {
                 .frame(height: 84)
                 .padding(.leading, 19)
                 .disabled(controller.isRunning)
-                .help(controller.isRunning ? L("面试进行中，岗位描述已经交给答案生成，结束后可以修改") : "")
+                .help(controller.isRunning ? L("面试进行中，结束后可修改") : "")
             }
         }
     }
