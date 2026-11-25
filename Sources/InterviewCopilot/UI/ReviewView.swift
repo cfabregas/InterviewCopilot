@@ -598,7 +598,9 @@ private struct SessionDetailView: View {
         panel.title = pdf ? L("导出 PDF") : L("导出 Markdown")
         panel.directoryURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
         panel.nameFieldStringValue = current.displayTitle.replacingOccurrences(of: "/", with: "-") + (pdf ? ".pdf" : ".md")
-        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let response = panel.runModal()
+        Log.write("导出对话框返回：\(response.rawValue)")
+        guard response == .OK, let url = panel.url else { return }
         do {
             if pdf {
                 try Exporter.writePDF(markdown: markdown, to: url)
