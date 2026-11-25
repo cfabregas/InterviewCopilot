@@ -363,13 +363,10 @@
   "切换到翻译": "Switch to translation",
   "翻译": "Translate",
   "中英文简历都用(%@，%@)": "Using both resumes (%@, %@)",
-  "在访达中显示": "Show in Finder",
-  "打开": "Open",
   "好": "OK",
-  "导出成功": "Exported",
   "导出失败": "Export failed",
-  "已保存到：%@": "Saved to: %@",
   "找不到这场面试的记录": "Couldn't find this interview's record",
   "导出 PDF": "Export PDF",
-  "导出 Markdown": "Export Markdown"
+  "导出 Markdown": "Export Markdown",
+  "已导出到 %@": "Exported to %@"
 }

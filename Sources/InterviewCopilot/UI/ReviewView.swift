@@ -260,6 +260,8 @@ private struct SessionDetailView: View {
     @State private var confirmingDelete = false
     /// 导出结果：成功时是文件位置，失败时是原因
     @State private var exportResult: ExportResult?
+    /// 导出成功的轻提示，几秒后自动消失
+    @State private var toast: String?
     @State private var renaming: Utterance?
     @State private var newName = ""
 
@@ -288,15 +290,25 @@ private struct SessionDetailView: View {
             .frame(maxWidth: .infinity)
         }
         .onAppear { title = session.title }
+        .overlay(alignment: .bottom) {
+            if let toast {
+                Text(toast)
+                    .font(.system(size: 12.5, weight: .medium))
+                    .foregroundStyle(.white)
+                    .lineLimit(1).truncationMode(.middle)
+                    .padding(.horizontal, 16).padding(.vertical, 9)
+                    .background(Capsule().fill(Color.black.opacity(0.78)))
+                    .padding(.bottom, 28).padding(.horizontal, 40)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .allowsHitTesting(false)
+            }
+        }
+        .animation(.easeOut(duration: 0.2), value: toast)
         .confirmationDialog(L("删除这场面试的全部记录和录音？删除后无法恢复。"), isPresented: $confirmingDelete) {
             Button(L("删除"), role: .destructive) { model.delete(session) }
             Button(L("取消"), role: .cancel) {}
         }
         .alert(exportResult?.title ?? "", isPresented: Binding(get: { exportResult != nil }, set: { if !$0 { exportResult = nil } }), presenting: exportResult) { result in
-            if let url = result.url {
-                Button(L("在访达中显示")) { NSWorkspace.shared.activateFileViewerSelecting([url]) }
-                Button(L("打开")) { NSWorkspace.shared.open(url) }
-            }
             Button(L("好"), role: .cancel) {}
         } message: { result in
             Text(result.message)
@@ -608,7 +620,9 @@ private struct SessionDetailView: View {
                 try markdown.write(to: url, atomically: true, encoding: .utf8)
             }
             Log.write("已导出：\(url.path)")
-            exportResult = ExportResult(url: url, title: L("导出成功"), message: L("已保存到：%@", url.path))
+            let shown = url.path.replacingOccurrences(of: NSHomeDirectory(), with: "~")
+            toast = L("已导出到 %@", shown)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { if toast == L("已导出到 %@", shown) { toast = nil } }
         } catch {
             Log.write("导出失败：\(error)")
             exportResult = ExportResult(url: nil, title: L("导出失败"), message: error.localizedDescription)
