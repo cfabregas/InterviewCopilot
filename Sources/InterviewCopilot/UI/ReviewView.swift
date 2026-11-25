@@ -272,7 +272,21 @@ private struct SessionDetailView: View {
             Rectangle().fill(Theme.line).frame(height: 1)
             // 时间轴、纪要、问答用一个滑块切换，一次只看一样
             VStack(alignment: .leading, spacing: 14) {
-                SlidingPicker(selection: $tab, options: [(0, L("时间轴")), (1, L("纪要")), (2, L("问答 %@", "\(model.qa.count)"))])
+                HStack {
+                    SlidingPicker(selection: $tab, options: [(0, L("时间轴")), (1, L("纪要")), (2, L("问答 %@", "\(model.qa.count)"))])
+                    Spacer(minLength: 12)
+                    // 导出当前这一页：在哪个页签就导出哪部分
+                    Menu(L("导出")) {
+                        Button("Markdown…") { export(pdf: false) }
+                        Button("PDF…") { export(pdf: true) }
+                    }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+                    .padding(.horizontal, 12).padding(.vertical, 5)
+                    .capsuleGlass()
+                    .disabled(!tabHasContent)
+                    .help(tabHasContent ? L("导出当前页签的内容") : L("这一页还没有内容"))
+                }
                 Group {
                     switch tab {
                     case 0: timeline
@@ -335,14 +349,6 @@ private struct SessionDetailView: View {
                 }
                 .buttonStyle(allDone ? AnyButtonStyle(QuietButtonStyle()) : AnyButtonStyle(PrimaryButtonStyle()))
                 .disabled(post.running != nil)
-                Menu(L("导出")) {
-                    Button("Markdown…") { export(pdf: false) }
-                    Button("PDF…") { export(pdf: true) }
-                }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
-                .padding(.horizontal, 12).padding(.vertical, 5)
-                .capsuleGlass()
                 Button(L("删除")) { confirmingDelete = true }
                     .buttonStyle(QuietButtonStyle())
                     .disabled(isProcessing)
@@ -584,16 +590,29 @@ private struct SessionDetailView: View {
         let message: String
     }
 
+    private var tabHasContent: Bool {
+        switch tab {
+        case 0: return !model.utterances.isEmpty
+        case 1: return !model.summary.isEmpty
+        default: return !model.qa.isEmpty
+        }
+    }
+
     private func export(pdf: Bool) {
         guard let store = Store.shared, let current = store.session(session.id) else {
             exportResult = ExportResult(url: nil, title: L("导出失败"), message: L("找不到这场面试的记录"))
             return
         }
-        let markdown = Exporter.markdown(session: current, summary: model.summary, qa: model.qa, utterances: model.utterances)
+        // 只导出当前页签那一部分，不混在一起
+        let markdown = Exporter.markdown(session: current,
+                                         summary: tab == 1 ? model.summary : "",
+                                         qa: tab == 2 ? model.qa : [],
+                                         utterances: tab == 0 ? model.utterances : [])
+        let part = [L("时间轴"), L("纪要"), L("问答")][min(tab, 2)]
         let panel = NSSavePanel()
         panel.title = pdf ? L("导出 PDF") : L("导出 Markdown")
         panel.directoryURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
-        panel.nameFieldStringValue = current.displayTitle.replacingOccurrences(of: "/", with: "-") + (pdf ? ".pdf" : ".md")
+        panel.nameFieldStringValue = current.displayTitle.replacingOccurrences(of: "/", with: "-") + "-" + part + (pdf ? ".pdf" : ".md")
         let response = panel.runModal()
         Log.write("导出对话框返回：\(response.rawValue)")
         guard response == .OK, let url = panel.url else { return }
