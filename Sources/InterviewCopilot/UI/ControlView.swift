@@ -179,7 +179,7 @@ struct ListenPage: View {
                     Text(L("岗位描述")).font(.system(size: 13)).foregroundStyle(Theme.muted).lineLimit(1)
                         .frame(width: L10n.shared.isSource ? 76 : 150, alignment: .leading)
                     Text(resume.jd.isEmpty ? L("选填") : L("已填写 %@ 字", "\(resume.jd.count)"))
-                        .font(.system(size: 13)).foregroundStyle(Theme.ink).lineLimit(1)
+                        .font(.system(size: 13)).foregroundStyle(resume.jd.isEmpty ? Theme.muted : Theme.ink).lineLimit(1)
                     Spacer()
                     if !resume.jd.isEmpty && !controller.isRunning {
                         Button(L("清空")) { resume.jd = "" }.buttonStyle(LinkButtonStyle())
@@ -187,7 +187,7 @@ struct ListenPage: View {
                 }
                 ZStack(alignment: .topLeading) {
                     if resume.jd.isEmpty {
-                        Text(L("粘贴岗位描述（JD），退出 app 后清空"))
+                        Text(L("可以粘贴岗位描述（JD）到此处，只针对当前面试生效"))
                             .font(.system(size: 12.5)).foregroundStyle(Theme.muted.opacity(0.8))
                             .padding(.horizontal, 5).padding(.vertical, 1)
                             .allowsHitTesting(false)

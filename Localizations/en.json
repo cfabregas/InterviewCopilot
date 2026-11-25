@@ -383,7 +383,7 @@
   "清空": "Clear",
   "管理简历": "Manage resumes",
   "选填": "Optional",
-  "粘贴岗位描述（JD），退出 app 后清空": "Paste the job description. Cleared when you quit.",
   "面试进行中，结束后可修改": "Editable after the interview ends",
-  "未填写岗位描述，可在面试助手的准备情况中填写。": "No job description. Add one under Readiness on the Copilot page."
+  "未填写岗位描述，可在面试助手的准备情况中填写。": "No job description. Add one under Readiness on the Copilot page.",
+  "可以粘贴岗位描述（JD）到此处，只针对当前面试生效": "Paste the job description (JD) here. It applies to this interview only."
 }
